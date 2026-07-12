@@ -633,47 +633,90 @@ local _onKeyInvalidCallback = nil
 --  HTTP helper — POST JSON body (bypass HoHo Hub key-format hook)
 --  HoHo Hub intercepts GET ?key=... và validate format → KEY_INVALID
 --  Gửi qua POST body thì HoHo Hub không parse → không bị block
+--  v2: retry 3 lần, timeout check, nhiều executor hơn
 -- ──────────────────────────────────────────────────────────
 local function httpPost(url, payload)
-    local body   = HttpService:JSONEncode(payload)
+    local body    = HttpService:JSONEncode(payload)
     local headers = {
         ["Content-Type"] = "application/json",
         ["Accept"]       = "application/json",
     }
-    -- Thử request() — HoHo Hub, Fluxus, Codex, Delta...
-    if request then
-        local ok, res = pcall(request, {
-            Url     = url,
-            Method  = "POST",
-            Headers = headers,
-            Body    = body,
-        })
-        if ok and res and res.Body then return res.Body end
+
+    -- Hàm thực hiện 1 lần POST — trả về body string hoặc nil
+    local function tryPost()
+        -- 1) request() — HoHo Hub, Fluxus, Codex, Delta, Wave...
+        if request then
+            local ok, res = pcall(request, {
+                Url     = url,
+                Method  = "POST",
+                Headers = headers,
+                Body    = body,
+            })
+            if ok and res and res.Body and #res.Body > 0 then
+                return res.Body
+            end
+        end
+        -- 2) syn.request — Synapse X / Synapse Z
+        if syn and syn.request then
+            local ok, res = pcall(syn.request, {
+                Url     = url,
+                Method  = "POST",
+                Headers = headers,
+                Body    = body,
+            })
+            if ok and res and res.Body and #res.Body > 0 then
+                return res.Body
+            end
+        end
+        -- 3) http.request — một số executor khác (Krnl, Electron...)
+        if http and http.request then
+            local ok, res = pcall(http.request, {
+                Url     = url,
+                Method  = "POST",
+                Headers = headers,
+                Body    = body,
+            })
+            if ok and res and res.Body and #res.Body > 0 then
+                return res.Body
+            end
+        end
+        -- 4) HttpService.RequestAsync (Roblox Studio / các executor mới)
+        if HttpService.RequestAsync then
+            local ok, res = pcall(function()
+                return HttpService:RequestAsync({
+                    Url     = url,
+                    Method  = "POST",
+                    Headers = headers,
+                    Body    = body,
+                })
+            end)
+            if ok and res and res.Body and #res.Body > 0 then
+                return res.Body
+            end
+        end
+        return nil
     end
-    -- Thử syn.request — Synapse X
-    if syn and syn.request then
-        local ok, res = pcall(syn.request, {
-            Url     = url,
-            Method  = "POST",
-            Headers = headers,
-            Body    = body,
-        })
-        if ok and res and res.Body then return res.Body end
+
+    -- Retry 3 lần với delay tăng dần (1s, 2s, 3s)
+    for attempt = 1, 3 do
+        local result = tryPost()
+        if result then return result end
+        if attempt < 3 then
+            task.wait(attempt) -- 1s, sau đó 2s trước lần thứ 3
+        end
     end
-    -- Thử http.request — một số executor khác
-    if http and http.request then
-        local ok, res = pcall(http.request, {
-            Url     = url,
-            Method  = "POST",
-            Headers = headers,
-            Body    = body,
-        })
-        if ok and res and res.Body then return res.Body end
-    end
-    -- Fallback: GET (Roblox Studio / executor không hỗ trợ POST body)
-    local getUrl = url .. "?key=" .. HttpService:UrlEncode(tostring(payload.key or ""))
-                       .. "&app=" .. HttpService:UrlEncode(tostring(payload.app  or ""))
-    return game:HttpGet(getUrl)
+
+    -- Fallback cuối: GET (Roblox Studio / executor không hỗ trợ POST body)
+    local getUrl = url
+        .. "?key=" .. HttpService:UrlEncode(tostring(payload.key or ""))
+        .. "&app=" .. HttpService:UrlEncode(tostring(payload.app or ""))
+    local ok, result = pcall(function()
+        return game:HttpGet(getUrl)
+    end)
+    if ok and result and #result > 0 then return result end
+
+    -- Không thể kết nối server
+    return nil
 end
 
 local function startBackgroundKeyCheck(key, onInvalid)
@@ -714,16 +757,31 @@ end
 -- ──────────────────────────────────────────────────────────
 local function verifyKey(key, callback)
     -- Gửi POST JSON body thay vì GET ?key=... để bypass HoHo Hub key-format hook
-    local ok, result = pcall(function()
-        return HttpService:JSONDecode(httpPost(
+    -- v2: xử lý nil response, JSON rỗng, timeout rõ ràng
+    local rawBody = nil
+    local fetchOk = pcall(function()
+        rawBody = httpPost(
             SERVER_URL .. "/api/verify",
             { key = key, app = APP_ID }
-        ))
+        )
     end)
-    if ok and result then
+
+    -- Không nhận được response gì từ server
+    if not fetchOk or not rawBody or rawBody == "" then
+        callback({ valid = false, reason = "network_error" })
+        return
+    end
+
+    -- Parse JSON response
+    local parseOk, result = pcall(function()
+        return HttpService:JSONDecode(rawBody)
+    end)
+
+    if parseOk and result and type(result) == "table" then
         callback(result)
     else
-        callback({ valid = false, reason = "network_error" })
+        -- Server trả về response không hợp lệ (bị truncate, HTML error page...)
+        callback({ valid = false, reason = "server_error" })
     end
 end
 
@@ -908,7 +966,8 @@ local ERROR_MESSAGES = {
     app_denied            = "App is not authorized.",
     app_pending_approval  = "App is pending approval.",
     rate_limited          = "Too many requests. Please try again later.",
-    network_error         = "Cannot connect to server. Please try again.",
+    network_error         = "Cannot connect to server. Please try again later.",
+    server_error          = "Server returned invalid response. Please try again.",
     missing_key           = "Please enter your key.",
 }
 
@@ -922,6 +981,7 @@ local TOAST_TYPE = {
     app_pending_approval  = "warning",
     rate_limited          = "warning",
     network_error         = "warning",
+    server_error          = "warning",
     missing_key           = "warning",
 }
 
@@ -1073,9 +1133,29 @@ local function startKeyGate(onSuccess)
         errLabel.BackgroundTransparency = 1
         setLoading(true)
 
+        -- Vô hiệu hoá nút trong lúc đang xác thực để tránh bấm nhiều lần
+        btn.Active = false
+
+        -- Timeout 20 giây — nếu server không phản hồi, hiện lỗi thay vì đơ mãi
+        local verifyDone = false
+        task.delay(20, function()
+            if not verifyDone then
+                verifyDone = true
+                task.defer(function()
+                    setLoading(false)
+                    btn.Active = true
+                    setError(ERROR_MESSAGES["network_error"])
+                    showToast(ERROR_MESSAGES["network_error"], nil, "warning")
+                end)
+            end
+        end)
+
         task.spawn(function()
             verifyKey(key, function(result)
+                if verifyDone then return end  -- timeout đã xử lý rồi
+                verifyDone = true
                 setLoading(false)
+                btn.Active = true
 
                 if result.valid then
                     keyVerified = true
