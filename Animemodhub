@@ -6178,21 +6178,15 @@ local function syncPulse()
 end
 
 -- ── FIX v9.1.3.2: Sau khi key thành công, menu tự mở ngay ──
--- v473 = true → menu đang HIỆN (khớp với trạng thái thực của main.Visible sau MakeWindow)
--- Gọi Minimize(false) để đảm bảo main.Visible = true và animation scale-in chạy đúng
+-- v466:Minimize(false) → main.Visible=true, tabList+pages hiện, animation scale-in
+-- v473=true → trạng thái toggle đồng bộ với thực tế (menu đang HIỆN)
+-- Block "Ẩn menu ngay từ đầu" cũ đã bị XÓA — đó là nguyên nhân menu bị đơ (mở rồi ẩn ngay)
 v466:Minimize(false)
-local v473 = true   -- true = đang hiện (menu đã tự mở sau key)
+local v473 = true   -- true = menu đang HIỆN
 local v474 = nil
 local v475 = nil
 local v476 = nil
 local v477 = nil
--- Ẩn menu ngay từ đầu (không animate, chỉ set Visible = false)
-do
-    local _mainRef = v466 and v466.Main
-    if _mainRef then
-        _mainRef.Visible = false
-    end
-end
 local function v480(v478)
     local v479 = v478.Position - v476
     l_ImageButton_0.Position = UDim2.new(v477.X.Scale, v477.X.Offset + v479.X, v477.Y.Scale, v477.Y.Offset + v479.Y)
