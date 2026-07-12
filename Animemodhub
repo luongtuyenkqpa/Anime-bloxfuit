@@ -28,144 +28,348 @@ local function createKeyGUI()
     ScreenGui.IgnoreGuiInset = true
     ScreenGui.Parent = LocalPlayer.PlayerGui
 
-    -- Overlay tối phía sau
+    -- ═══════════════════════════════════════════════
+    --  OVERLAY + hiệu ứng mờ nền
+    -- ═══════════════════════════════════════════════
     local Overlay = Instance.new("Frame")
     Overlay.Name = "Overlay"
     Overlay.Size = UDim2.fromScale(1, 1)
-    Overlay.BackgroundColor3 = Color3.fromRGB(8, 8, 18)
-    Overlay.BackgroundTransparency = 0.25
+    Overlay.BackgroundColor3 = Color3.fromRGB(4, 4, 14)
+    Overlay.BackgroundTransparency = 0.18
     Overlay.BorderSizePixel = 0
     Overlay.ZIndex = 10
     Overlay.Parent = ScreenGui
 
-    -- Card chính
+    -- ═══════════════════════════════════════════════
+    --  PARTICLE STARS (hiệu ứng sao nền)
+    -- ═══════════════════════════════════════════════
+    local StarContainer = Instance.new("Frame")
+    StarContainer.Size = UDim2.fromScale(1, 1)
+    StarContainer.BackgroundTransparency = 1
+    StarContainer.ZIndex = 10
+    StarContainer.Parent = ScreenGui
+
+    local starColors = {
+        Color3.fromRGB(0, 200, 255),
+        Color3.fromRGB(160, 80, 255),
+        Color3.fromRGB(255, 100, 200),
+        Color3.fromRGB(255, 220, 80),
+        Color3.fromRGB(255, 255, 255),
+    }
+    for i = 1, 28 do
+        local star = Instance.new("Frame")
+        local sz = math.random(2, 5)
+        star.Size = UDim2.new(0, sz, 0, sz)
+        star.Position = UDim2.new(math.random(0, 100)/100, 0, math.random(0, 100)/100, 0)
+        star.BackgroundColor3 = starColors[math.random(#starColors)]
+        star.BackgroundTransparency = math.random(30, 70) / 100
+        star.BorderSizePixel = 0
+        star.ZIndex = 10
+        star.Parent = StarContainer
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(1, 0)
+        c.Parent = star
+        -- animate twinkle
+        task.spawn(function()
+            while star and star.Parent do
+                local t = math.random(8, 20) / 10
+                TweenService:Create(star, TweenInfo.new(t, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                    BackgroundTransparency = math.random(60, 95) / 100
+                }):Play()
+                task.wait(t)
+            end
+        end)
+    end
+
+    -- ═══════════════════════════════════════════════
+    --  CARD CHÍNH với viền gradient anime
+    -- ═══════════════════════════════════════════════
+    -- Outer glow frame
+    local GlowFrame = Instance.new("Frame")
+    GlowFrame.Name = "GlowFrame"
+    GlowFrame.Size = UDim2.new(0, 392, 0, 368)
+    GlowFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+    GlowFrame.Position = UDim2.fromScale(0.5, 0.5)
+    GlowFrame.BackgroundColor3 = Color3.fromRGB(120, 40, 255)
+    GlowFrame.BackgroundTransparency = 0.55
+    GlowFrame.BorderSizePixel = 0
+    GlowFrame.ZIndex = 11
+    GlowFrame.Parent = ScreenGui
+    local GlowCorner = Instance.new("UICorner")
+    GlowCorner.CornerRadius = UDim.new(0, 20)
+    GlowCorner.Parent = GlowFrame
+
+    -- Animate glow color
+    task.spawn(function()
+        local glowColors = {
+            Color3.fromRGB(100, 0, 255),
+            Color3.fromRGB(0, 180, 255),
+            Color3.fromRGB(255, 60, 180),
+            Color3.fromRGB(0, 255, 200),
+        }
+        local idx = 1
+        while GlowFrame and GlowFrame.Parent do
+            idx = idx % #glowColors + 1
+            TweenService:Create(GlowFrame, TweenInfo.new(2.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+                BackgroundColor3 = glowColors[idx]
+            }):Play()
+            task.wait(2.5)
+        end
+    end)
+
     local Card = Instance.new("Frame")
     Card.Name = "Card"
-    Card.Size = UDim2.new(0, 380, 0, 330)
+    Card.Size = UDim2.new(0, 380, 0, 356)
     Card.AnchorPoint = Vector2.new(0.5, 0.5)
     Card.Position = UDim2.fromScale(0.5, 0.5)
-    Card.BackgroundColor3 = Color3.fromRGB(15, 16, 30)
+    Card.BackgroundColor3 = Color3.fromRGB(10, 10, 22)
     Card.BorderSizePixel = 0
-    Card.ZIndex = 11
+    Card.ZIndex = 12
     Card.Parent = ScreenGui
 
     local CardCorner = Instance.new("UICorner")
-    CardCorner.CornerRadius = UDim.new(0, 16)
+    CardCorner.CornerRadius = UDim.new(0, 18)
     CardCorner.Parent = Card
 
     local CardStroke = Instance.new("UIStroke")
-    CardStroke.Color = Color3.fromRGB(50, 55, 100)
-    CardStroke.Thickness = 1.5
+    CardStroke.Color = Color3.fromRGB(80, 40, 200)
+    CardStroke.Thickness = 1.8
     CardStroke.Parent = Card
 
-    -- Fade-in animation cho card
+    -- Gradient nền card
+    local CardGrad = Instance.new("UIGradient")
+    CardGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(14, 8, 38)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(10, 10, 22)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 18, 38)),
+    })
+    CardGrad.Rotation = 135
+    CardGrad.Parent = Card
+
+    -- Fade-in animation
     Card.BackgroundTransparency = 1
-    TweenService:Create(Card, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+    GlowFrame.BackgroundTransparency = 1
+    TweenService:Create(Card, TweenInfo.new(0.45, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
         BackgroundTransparency = 0
     }):Play()
+    TweenService:Create(GlowFrame, TweenInfo.new(0.45, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0.55
+    }):Play()
+    -- Scale in animation
+    Card.Size = UDim2.new(0, 200, 0, 200)
+    TweenService:Create(Card, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 380, 0, 356)
+    }):Play()
 
-    -- Icon
-    local Icon = Instance.new("TextLabel")
-    Icon.Size = UDim2.new(1, 0, 0, 52)
-    Icon.Position = UDim2.new(0, 0, 0, 20)
-    Icon.BackgroundTransparency = 1
-    Icon.Text = "🔑"
-    Icon.TextSize = 38
-    Icon.ZIndex = 12
-    Icon.Parent = Card
+    -- ═══════════════════════════════════════════════
+    --  TOP BANNER (gradient xanh tím)
+    -- ═══════════════════════════════════════════════
+    local TopBanner = Instance.new("Frame")
+    TopBanner.Size = UDim2.new(1, 0, 0, 72)
+    TopBanner.BackgroundColor3 = Color3.fromRGB(60, 0, 180)
+    TopBanner.BorderSizePixel = 0
+    TopBanner.ZIndex = 13
+    TopBanner.Parent = Card
 
-    -- Tiêu đề
+    local TopCorner = Instance.new("UICorner")
+    TopCorner.CornerRadius = UDim.new(0, 18)
+    TopCorner.Parent = TopBanner
+
+    local TopGrad = Instance.new("UIGradient")
+    TopGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 0, 255)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 160, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 0, 200)),
+    })
+    TopGrad.Rotation = 90
+    TopGrad.Parent = TopBanner
+
+    -- Animate gradient rotation
+    task.spawn(function()
+        local rot = 0
+        while TopBanner and TopBanner.Parent do
+            rot = (rot + 1) % 360
+            TopGrad.Rotation = rot
+            task.wait(0.05)
+        end
+    end)
+
+    -- Icon anime (katana / ninja emoji)
+    local IconLabel = Instance.new("TextLabel")
+    IconLabel.Size = UDim2.new(0, 50, 0, 50)
+    IconLabel.Position = UDim2.new(0, 14, 0, 11)
+    IconLabel.BackgroundTransparency = 1
+    IconLabel.Text = "⚔️"
+    IconLabel.TextSize = 32
+    IconLabel.ZIndex = 14
+    IconLabel.Parent = TopBanner
+
+    -- Title
     local Title = Instance.new("TextLabel")
-    Title.Size = UDim2.new(1, -40, 0, 28)
-    Title.Position = UDim2.new(0, 20, 0, 78)
+    Title.Size = UDim2.new(1, -70, 0, 30)
+    Title.Position = UDim2.new(0, 56, 0, 8)
     Title.BackgroundTransparency = 1
     Title.Text = "ANIME MOD HUB"
-    Title.TextColor3 = Color3.fromRGB(220, 220, 255)
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
     Title.TextSize = 20
     Title.Font = Enum.Font.GothamBold
-    Title.TextXAlignment = Enum.TextXAlignment.Center
-    Title.ZIndex = 12
-    Title.Parent = Card
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.TextStrokeColor3 = Color3.fromRGB(180, 100, 255)
+    Title.TextStrokeTransparency = 0.3
+    Title.ZIndex = 14
+    Title.Parent = TopBanner
 
-    -- Subtitle
-    local Sub = Instance.new("TextLabel")
-    Sub.Size = UDim2.new(1, -40, 0, 22)
-    Sub.Position = UDim2.new(0, 20, 0, 108)
-    Sub.BackgroundTransparency = 1
-    Sub.Text = "Nhập key để kích hoạt script"
-    Sub.TextColor3 = Color3.fromRGB(120, 120, 160)
-    Sub.TextSize = 12
-    Sub.Font = Enum.Font.Gotham
-    Sub.TextXAlignment = Enum.TextXAlignment.Center
-    Sub.ZIndex = 12
-    Sub.Parent = Card
+    local SubTitle = Instance.new("TextLabel")
+    SubTitle.Size = UDim2.new(1, -70, 0, 20)
+    SubTitle.Position = UDim2.new(0, 56, 0, 40)
+    SubTitle.BackgroundTransparency = 1
+    SubTitle.Text = "✦ Nhập key để kích hoạt script ✦"
+    SubTitle.TextColor3 = Color3.fromRGB(200, 200, 255)
+    SubTitle.TextSize = 11
+    SubTitle.Font = Enum.Font.Gotham
+    SubTitle.TextXAlignment = Enum.TextXAlignment.Left
+    SubTitle.ZIndex = 14
+    SubTitle.Parent = TopBanner
 
-    -- Input field background
+    -- ═══════════════════════════════════════════════
+    --  DIVIDER LINE với hiệu ứng shimmer
+    -- ═══════════════════════════════════════════════
+    local Divider = Instance.new("Frame")
+    Divider.Size = UDim2.new(1, -40, 0, 2)
+    Divider.Position = UDim2.new(0, 20, 0, 80)
+    Divider.BackgroundColor3 = Color3.fromRGB(100, 60, 220)
+    Divider.BorderSizePixel = 0
+    Divider.ZIndex = 13
+    Divider.Parent = Card
+    local DivGrad = Instance.new("UIGradient")
+    DivGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(0,0,0)),
+        ColorSequenceKeypoint.new(0.3, Color3.fromRGB(120, 60, 255)),
+        ColorSequenceKeypoint.new(0.7, Color3.fromRGB(0, 180, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(0,0,0)),
+    })
+    DivGrad.Rotation = 0
+    DivGrad.Parent = Divider
+    -- Shimmer animation
+    task.spawn(function()
+        local offset = 0
+        while Divider and Divider.Parent do
+            offset = (offset + 0.02) % 1
+            DivGrad.Offset = Vector2.new(offset, 0)
+            task.wait(0.03)
+        end
+    end)
+
+    -- ═══════════════════════════════════════════════
+    --  LABEL NHẬP KEY
+    -- ═══════════════════════════════════════════════
+    local KeyLabel = Instance.new("TextLabel")
+    KeyLabel.Size = UDim2.new(1, -40, 0, 22)
+    KeyLabel.Position = UDim2.new(0, 20, 0, 92)
+    KeyLabel.BackgroundTransparency = 1
+    KeyLabel.Text = "🔑  KEY XÁC THỰC"
+    KeyLabel.TextColor3 = Color3.fromRGB(160, 120, 255)
+    KeyLabel.TextSize = 12
+    KeyLabel.Font = Enum.Font.GothamBold
+    KeyLabel.TextXAlignment = Enum.TextXAlignment.Left
+    KeyLabel.ZIndex = 13
+    KeyLabel.Parent = Card
+
+    -- ═══════════════════════════════════════════════
+    --  INPUT FIELD với glow viền
+    -- ═══════════════════════════════════════════════
     local InputBG = Instance.new("Frame")
-    InputBG.Size = UDim2.new(1, -40, 0, 44)
-    InputBG.Position = UDim2.new(0, 20, 0, 148)
-    InputBG.BackgroundColor3 = Color3.fromRGB(22, 24, 45)
+    InputBG.Size = UDim2.new(1, -40, 0, 48)
+    InputBG.Position = UDim2.new(0, 20, 0, 118)
+    InputBG.BackgroundColor3 = Color3.fromRGB(16, 12, 36)
     InputBG.BorderSizePixel = 0
-    InputBG.ZIndex = 12
+    InputBG.ZIndex = 13
     InputBG.Parent = Card
 
     local InputCorner = Instance.new("UICorner")
-    InputCorner.CornerRadius = UDim.new(0, 10)
+    InputCorner.CornerRadius = UDim.new(0, 12)
     InputCorner.Parent = InputBG
 
     local InputStroke = Instance.new("UIStroke")
-    InputStroke.Color = Color3.fromRGB(55, 60, 110)
-    InputStroke.Thickness = 1.5
+    InputStroke.Color = Color3.fromRGB(80, 40, 180)
+    InputStroke.Thickness = 1.8
     InputStroke.Parent = InputBG
 
-    -- Key icon bên trong input
+    -- Icon khoá
     local KeyIcon = Instance.new("TextLabel")
-    KeyIcon.Size = UDim2.new(0, 30, 1, 0)
-    KeyIcon.Position = UDim2.new(0, 6, 0, 0)
+    KeyIcon.Size = UDim2.new(0, 36, 1, 0)
+    KeyIcon.Position = UDim2.new(0, 4, 0, 0)
     KeyIcon.BackgroundTransparency = 1
     KeyIcon.Text = "🔐"
-    KeyIcon.TextSize = 16
-    KeyIcon.ZIndex = 13
+    KeyIcon.TextSize = 18
+    KeyIcon.ZIndex = 14
     KeyIcon.Parent = InputBG
 
-    -- Ô nhập key
+    -- TextBox
     local Input = Instance.new("TextBox")
     Input.Name = "KeyInput"
-    Input.Size = UDim2.new(1, -42, 1, 0)
-    Input.Position = UDim2.new(0, 36, 0, 0)
+    Input.Size = UDim2.new(1, -46, 1, 0)
+    Input.Position = UDim2.new(0, 40, 0, 0)
     Input.BackgroundTransparency = 1
     Input.PlaceholderText = "Nhập key của bạn..."
-    Input.PlaceholderColor3 = Color3.fromRGB(80, 80, 120)
+    Input.PlaceholderColor3 = Color3.fromRGB(70, 60, 110)
     Input.Text = ""
-    Input.TextColor3 = Color3.fromRGB(210, 210, 255)
+    Input.TextColor3 = Color3.fromRGB(220, 200, 255)
     Input.TextSize = 13
     Input.Font = Enum.Font.Code
     Input.ClearTextOnFocus = false
-    Input.ZIndex = 13
+    Input.ZIndex = 14
     Input.Parent = InputBG
 
-    -- Nút xác thực
+    -- Focus glow effect
+    Input.Focused:Connect(function()
+        TweenService:Create(InputStroke, TweenInfo.new(0.25), {
+            Color = Color3.fromRGB(140, 80, 255),
+            Thickness = 2.2
+        }):Play()
+    end)
+    Input.FocusLost:Connect(function()
+        TweenService:Create(InputStroke, TweenInfo.new(0.25), {
+            Color = Color3.fromRGB(80, 40, 180),
+            Thickness = 1.8
+        }):Play()
+    end)
+
+    -- ═══════════════════════════════════════════════
+    --  NÚT XÁC THỰC (gradient đẹp + hiệu ứng nhấn)
+    -- ═══════════════════════════════════════════════
     local BtnFrame = Instance.new("Frame")
-    BtnFrame.Size = UDim2.new(1, -40, 0, 44)
-    BtnFrame.Position = UDim2.new(0, 20, 0, 206)
-    BtnFrame.BackgroundColor3 = Color3.fromRGB(38, 120, 42)
+    BtnFrame.Size = UDim2.new(1, -40, 0, 48)
+    BtnFrame.Position = UDim2.new(0, 20, 0, 180)
+    BtnFrame.BackgroundColor3 = Color3.fromRGB(60, 20, 180)
     BtnFrame.BorderSizePixel = 0
-    BtnFrame.ZIndex = 12
+    BtnFrame.ZIndex = 13
     BtnFrame.Parent = Card
 
     local BtnCorner = Instance.new("UICorner")
-    BtnCorner.CornerRadius = UDim.new(0, 10)
+    BtnCorner.CornerRadius = UDim.new(0, 12)
     BtnCorner.Parent = BtnFrame
+
+    local BtnGrad = Instance.new("UIGradient")
+    BtnGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 40, 255)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(60, 120, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 60, 220)),
+    })
+    BtnGrad.Rotation = 90
+    BtnGrad.Parent = BtnFrame
 
     local BtnLabel = Instance.new("TextLabel")
     BtnLabel.Name = "BtnLabel"
     BtnLabel.Size = UDim2.fromScale(1, 1)
     BtnLabel.BackgroundTransparency = 1
-    BtnLabel.Text = "✔  Xác Thực Key"
+    BtnLabel.Text = "⚡  XÁC THỰC KEY  ⚡"
     BtnLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     BtnLabel.TextSize = 14
     BtnLabel.Font = Enum.Font.GothamBold
-    BtnLabel.ZIndex = 13
+    BtnLabel.TextStrokeColor3 = Color3.fromRGB(255, 200, 255)
+    BtnLabel.TextStrokeTransparency = 0.6
+    BtnLabel.ZIndex = 14
     BtnLabel.Parent = BtnFrame
 
     local BtnBtn = Instance.new("TextButton")
@@ -173,43 +377,90 @@ local function createKeyGUI()
     BtnBtn.Size = UDim2.fromScale(1, 1)
     BtnBtn.BackgroundTransparency = 1
     BtnBtn.Text = ""
-    BtnBtn.ZIndex = 14
+    BtnBtn.ZIndex = 15
     BtnBtn.Parent = BtnFrame
 
-    -- Thông báo lỗi
+    -- Hover/press effect
+    BtnBtn.MouseEnter:Connect(function()
+        TweenService:Create(BtnFrame, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(80, 40, 200)
+        }):Play()
+    end)
+    BtnBtn.MouseLeave:Connect(function()
+        TweenService:Create(BtnFrame, TweenInfo.new(0.2), {
+            BackgroundColor3 = Color3.fromRGB(60, 20, 180)
+        }):Play()
+    end)
+
+    -- ═══════════════════════════════════════════════
+    --  ERROR LABEL
+    -- ═══════════════════════════════════════════════
     local ErrLabel = Instance.new("TextLabel")
     ErrLabel.Name = "ErrorLabel"
-    ErrLabel.Size = UDim2.new(1, -40, 0, 26)
-    ErrLabel.Position = UDim2.new(0, 20, 0, 258)
-    ErrLabel.BackgroundColor3 = Color3.fromRGB(60, 15, 15)
+    ErrLabel.Size = UDim2.new(1, -40, 0, 28)
+    ErrLabel.Position = UDim2.new(0, 20, 0, 242)
+    ErrLabel.BackgroundColor3 = Color3.fromRGB(80, 10, 30)
     ErrLabel.BackgroundTransparency = 1
     ErrLabel.Text = ""
-    ErrLabel.TextColor3 = Color3.fromRGB(240, 100, 100)
+    ErrLabel.TextColor3 = Color3.fromRGB(255, 100, 130)
     ErrLabel.TextSize = 12
-    ErrLabel.Font = Enum.Font.Gotham
+    ErrLabel.Font = Enum.Font.GothamBold
     ErrLabel.TextXAlignment = Enum.TextXAlignment.Center
-    ErrLabel.ZIndex = 12
+    ErrLabel.ZIndex = 13
     ErrLabel.Parent = Card
 
     local ErrCorner = Instance.new("UICorner")
-    ErrCorner.CornerRadius = UDim.new(0, 6)
+    ErrCorner.CornerRadius = UDim.new(0, 8)
     ErrCorner.Parent = ErrLabel
 
-    -- Footer
+    -- ═══════════════════════════════════════════════
+    --  DIVIDER dưới
+    -- ═══════════════════════════════════════════════
+    local Divider2 = Instance.new("Frame")
+    Divider2.Size = UDim2.new(1, -40, 0, 1)
+    Divider2.Position = UDim2.new(0, 20, 0, 284)
+    Divider2.BackgroundColor3 = Color3.fromRGB(50, 30, 100)
+    Divider2.BorderSizePixel = 0
+    Divider2.ZIndex = 13
+    Divider2.Parent = Card
+
+    -- ═══════════════════════════════════════════════
+    --  FOOTER
+    -- ═══════════════════════════════════════════════
     local Footer = Instance.new("TextLabel")
-    Footer.Size = UDim2.new(1, -40, 0, 22)
-    Footer.Position = UDim2.new(0, 20, 0, 296)
+    Footer.Size = UDim2.new(1, -40, 0, 30)
+    Footer.Position = UDim2.new(0, 20, 0, 294)
     Footer.BackgroundTransparency = 1
-    Footer.Text = "Dev Gatinho • Mua key tại server của shop"
-    Footer.TextColor3 = Color3.fromRGB(70, 70, 100)
+    Footer.Text = "👑 Dev Gatinho  •  Mua key tại server của shop  🛒"
+    Footer.TextColor3 = Color3.fromRGB(80, 60, 140)
     Footer.TextSize = 10
     Footer.Font = Enum.Font.Gotham
     Footer.TextXAlignment = Enum.TextXAlignment.Center
-    Footer.ZIndex = 12
+    Footer.ZIndex = 13
     Footer.Parent = Card
+
+    -- ═══════════════════════════════════════════════
+    --  VERSION BADGE
+    -- ═══════════════════════════════════════════════
+    local VerBadge = Instance.new("TextLabel")
+    VerBadge.Size = UDim2.new(0, 80, 0, 18)
+    VerBadge.Position = UDim2.new(0, 20, 0, 326)
+    VerBadge.BackgroundColor3 = Color3.fromRGB(40, 20, 80)
+    VerBadge.BackgroundTransparency = 0.3
+    VerBadge.Text = "v1.0 • SEA3"
+    VerBadge.TextColor3 = Color3.fromRGB(120, 100, 200)
+    VerBadge.TextSize = 9
+    VerBadge.Font = Enum.Font.Code
+    VerBadge.TextXAlignment = Enum.TextXAlignment.Center
+    VerBadge.ZIndex = 13
+    VerBadge.Parent = Card
+    local VerCorner = Instance.new("UICorner")
+    VerCorner.CornerRadius = UDim.new(0, 5)
+    VerCorner.Parent = VerBadge
 
     return ScreenGui, BtnBtn, Input, ErrLabel, BtnLabel, InputStroke
 end
+
 
 -- ──────────────────────────────────────────────────────────
 --  Xác thực key với server
@@ -411,6 +662,32 @@ else
     wait(3)
     error("Không phải game Blox Fruits!")
 end 
+-- ════════════════════════════════════════════════════════
+--  TỐI ƯU LAG — giảm render + tắt shadows + giới hạn FPS
+-- ════════════════════════════════════════════════════════
+pcall(function()
+    local Lighting = game:GetService("Lighting")
+    local workspace = game:GetService("Workspace")
+    -- Tắt hiệu ứng nặng
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 9e9
+    Lighting.Brightness = 1
+    -- Giảm chất lượng render
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    -- Giảm MaxActiveSoundsCount
+    SoundService = game:GetService("SoundService")
+    SoundService.DistanceFactor = 3.33
+    -- Tắt particles trong workspace (giảm lag)
+    for _, v in pairs(workspace:GetDescendants()) do
+        if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+            v.Enabled = false
+        end
+    end
+    -- Throttle update rate cho decorative objects
+    workspace.StreamingEnabled = false
+end)
+
+
 function MaterialMon()
     if _G.SelectMaterial ~= "Radiactive Material" then
         if _G.SelectMaterial ~= "Leather + Scrap Metal" then
@@ -4062,16 +4339,18 @@ function CheckItemBPCRBPCR(v463)
         end
     end
 end
--- Embedded UI Library for executors that block game:HttpGet()
+-- Embedded UI Library — Anime Mod Hub Compact v2.0
+-- ════════════════════════════════════════════════════════════════
+--  ANIME MOD HUB — UI LIBRARY (COMPACT + ANIME EFFECTS + ANTI-LAG)
+-- ════════════════════════════════════════════════════════════════
 local function CreateAnimeModUILibrary()
     local UserInputService = game:GetService("UserInputService")
     local CoreGui = game:GetService("CoreGui")
+    local TweenService = game:GetService("TweenService")
 
     local function protectGui(gui)
         pcall(function()
-            if syn and syn.protect_gui then
-                syn.protect_gui(gui)
-            end
+            if syn and syn.protect_gui then syn.protect_gui(gui) end
         end)
         gui.Parent = CoreGui
     end
@@ -4085,9 +4364,9 @@ local function CreateAnimeModUILibrary()
 
     local function addStroke(parent, color, thickness)
         local stroke = Instance.new("UIStroke")
-        stroke.Color = color or Color3.fromRGB(0, 191, 255)
-        stroke.Thickness = thickness or 1
-        stroke.Transparency = 0.35
+        stroke.Color = color or Color3.fromRGB(100, 50, 255)
+        stroke.Thickness = thickness or 1.2
+        stroke.Transparency = 0.2
         stroke.Parent = parent
         return stroke
     end
@@ -4096,7 +4375,6 @@ local function CreateAnimeModUILibrary()
         local dragging = false
         local dragInput, dragStart, startPos
         local handle = dragHandle or frame
-
         handle.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 dragging = true
@@ -4109,14 +4387,12 @@ local function CreateAnimeModUILibrary()
                 end)
             end
         end)
-
         handle.InputChanged:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
                 dragInput = input
             end
         end)
-
-        UserInputService.InputChanged:Connect(function(input)
+        game:GetService("UserInputService").InputChanged:Connect(function(input)
             if dragging and input == dragInput then
                 local delta = input.Position - dragStart
                 frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
@@ -4130,9 +4406,7 @@ local function CreateAnimeModUILibrary()
         config = config or {}
 
         local old = CoreGui:FindFirstChild("AnimeModHubEmbeddedUI")
-        if old then
-            old:Destroy()
-        end
+        if old then old:Destroy() end
 
         local gui = Instance.new("ScreenGui")
         gui.Name = "AnimeModHubEmbeddedUI"
@@ -4140,85 +4414,146 @@ local function CreateAnimeModUILibrary()
         gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         protectGui(gui)
 
+        -- ─── MAIN FRAME (compact: 560x380) ───────────────────────
         local main = Instance.new("Frame")
         main.Name = "Main"
-        main.Size = UDim2.new(0, 620, 0, 420)
-        main.Position = UDim2.new(0.5, -310, 0.5, -210)
-        main.BackgroundColor3 = Color3.fromRGB(12, 12, 20)
+        main.Size = UDim2.new(0, 560, 0, 380)
+        main.Position = UDim2.new(0.5, -280, 0.5, -190)
+        main.BackgroundColor3 = Color3.fromRGB(8, 8, 18)
         main.BorderSizePixel = 0
         main.Active = true
         main.Parent = gui
-        addCorner(main, 10)
-        addStroke(main, Color3.fromRGB(0, 191, 255), 1.5)
+        addCorner(main, 12)
 
+        local mainStroke = Instance.new("UIStroke")
+        mainStroke.Color = Color3.fromRGB(100, 50, 220)
+        mainStroke.Thickness = 1.5
+        mainStroke.Parent = main
+
+        -- Outer glow animation on border
+        task.spawn(function()
+            local glowColors = {
+                Color3.fromRGB(100, 50, 255),
+                Color3.fromRGB(0, 160, 255),
+                Color3.fromRGB(220, 60, 200),
+                Color3.fromRGB(60, 220, 200),
+            }
+            local idx = 1
+            while main and main.Parent do
+                idx = idx % #glowColors + 1
+                TweenService:Create(mainStroke, TweenInfo.new(2, Enum.EasingStyle.Sine), {
+                    Color = glowColors[idx]
+                }):Play()
+                task.wait(2)
+            end
+        end)
+
+        -- ─── TOP BAR (gradient anime) ─────────────────────────────
         local top = Instance.new("Frame")
         top.Name = "TopBar"
-        top.Size = UDim2.new(1, 0, 0, 48)
-        top.BackgroundColor3 = Color3.fromRGB(0, 191, 255)
+        top.Size = UDim2.new(1, 0, 0, 42)
+        top.BackgroundColor3 = Color3.fromRGB(60, 20, 180)
         top.BorderSizePixel = 0
         top.Parent = main
-        addCorner(top, 10)
+        addCorner(top, 12)
 
+        local topGrad = Instance.new("UIGradient")
+        topGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 30, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 140, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 40, 200)),
+        })
+        topGrad.Rotation = 90
+        topGrad.Parent = top
+
+        -- Animate gradient
+        task.spawn(function()
+            local rot = 0
+            while top and top.Parent do
+                rot = (rot + 0.5) % 360
+                topGrad.Rotation = rot
+                task.wait(0.04)
+            end
+        end)
+
+        -- Icon
+        local topIcon = Instance.new("TextLabel")
+        topIcon.BackgroundTransparency = 1
+        topIcon.Size = UDim2.new(0, 32, 0, 32)
+        topIcon.Position = UDim2.new(0, 8, 0, 5)
+        topIcon.Text = "⚡"
+        topIcon.TextSize = 20
+        topIcon.ZIndex = 2
+        topIcon.Parent = top
+
+        -- Title
         local title = Instance.new("TextLabel")
         title.BackgroundTransparency = 1
-        title.Size = UDim2.new(1, -56, 0, 26)
-        title.Position = UDim2.new(0, 14, 0, 4)
+        title.Size = UDim2.new(1, -120, 0, 22)
+        title.Position = UDim2.new(0, 36, 0, 4)
         title.Font = Enum.Font.GothamBold
-        title.TextSize = 17
+        title.TextSize = 15
         title.TextColor3 = Color3.fromRGB(255, 255, 255)
+        title.TextStrokeColor3 = Color3.fromRGB(200, 150, 255)
+        title.TextStrokeTransparency = 0.4
         title.TextXAlignment = Enum.TextXAlignment.Left
-        title.Text = tostring(config.Title or "ANIME MOD HUB")
+        title.Text = tostring(config.Title or "⚡ANIME MOD HUB v1.0⚡")
         title.Parent = top
 
         local subtitle = Instance.new("TextLabel")
         subtitle.BackgroundTransparency = 1
-        subtitle.Size = UDim2.new(1, -56, 0, 18)
-        subtitle.Position = UDim2.new(0, 14, 0, 27)
+        subtitle.Size = UDim2.new(1, -120, 0, 15)
+        subtitle.Position = UDim2.new(0, 36, 0, 25)
         subtitle.Font = Enum.Font.Gotham
-        subtitle.TextSize = 12
-        subtitle.TextColor3 = Color3.fromRGB(230, 245, 255)
+        subtitle.TextSize = 10
+        subtitle.TextColor3 = Color3.fromRGB(200, 190, 255)
         subtitle.TextXAlignment = Enum.TextXAlignment.Left
-        subtitle.Text = tostring(config.SubTitle or "By Dev Gatinho")
+        subtitle.Text = tostring(config.SubTitle or "【By 👑Dev Gatinho👑】")
         subtitle.Parent = top
 
+        -- Minimize button
         local minimizeButton = Instance.new("TextButton")
-        minimizeButton.Size = UDim2.new(0, 38, 0, 32)
-        minimizeButton.Position = UDim2.new(1, -43, 0, 8)
-        minimizeButton.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+        minimizeButton.Size = UDim2.new(0, 32, 0, 26)
+        minimizeButton.Position = UDim2.new(1, -38, 0, 8)
+        minimizeButton.BackgroundColor3 = Color3.fromRGB(20, 10, 50)
         minimizeButton.Text = "—"
         minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
         minimizeButton.Font = Enum.Font.GothamBold
-        minimizeButton.TextSize = 20
+        minimizeButton.TextSize = 16
         minimizeButton.Parent = top
-        addCorner(minimizeButton, 8)
+        addCorner(minimizeButton, 7)
+        addStroke(minimizeButton, Color3.fromRGB(80, 40, 180), 1)
 
+        -- ─── TAB LIST (compact: 140px wide) ──────────────────────
         local tabList = Instance.new("ScrollingFrame")
         tabList.Name = "TabList"
-        tabList.Size = UDim2.new(0, 170, 1, -58)
-        tabList.Position = UDim2.new(0, 10, 0, 54)
-        tabList.BackgroundColor3 = Color3.fromRGB(17, 17, 28)
+        tabList.Size = UDim2.new(0, 145, 1, -50)
+        tabList.Position = UDim2.new(0, 6, 0, 48)
+        tabList.BackgroundColor3 = Color3.fromRGB(12, 10, 26)
         tabList.BorderSizePixel = 0
-        tabList.ScrollBarThickness = 3
+        tabList.ScrollBarThickness = 2
         tabList.CanvasSize = UDim2.new(0, 0, 0, 0)
         tabList.AutomaticCanvasSize = Enum.AutomaticSize.Y
         tabList.Parent = main
         addCorner(tabList, 8)
+        addStroke(tabList, Color3.fromRGB(50, 30, 120), 1)
 
         local tabLayout = Instance.new("UIListLayout")
-        tabLayout.Padding = UDim.new(0, 6)
+        tabLayout.Padding = UDim.new(0, 4)
         tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
         tabLayout.Parent = tabList
 
         local tabPadding = Instance.new("UIPadding")
-        tabPadding.PaddingTop = UDim.new(0, 8)
-        tabPadding.PaddingLeft = UDim.new(0, 8)
-        tabPadding.PaddingRight = UDim.new(0, 8)
+        tabPadding.PaddingTop = UDim.new(0, 6)
+        tabPadding.PaddingLeft = UDim.new(0, 6)
+        tabPadding.PaddingRight = UDim.new(0, 6)
         tabPadding.Parent = tabList
 
+        -- ─── PAGES ───────────────────────────────────────────────
         local pages = Instance.new("Frame")
         pages.Name = "Pages"
-        pages.Size = UDim2.new(1, -195, 1, -58)
-        pages.Position = UDim2.new(0, 185, 0, 54)
+        pages.Size = UDim2.new(1, -158, 1, -50)
+        pages.Position = UDim2.new(0, 154, 0, 46)
         pages.BackgroundTransparency = 1
         pages.Parent = main
 
@@ -4229,19 +4564,25 @@ local function CreateAnimeModUILibrary()
         local function setActiveTab(tab)
             for _, existing in ipairs(window.Tabs) do
                 existing.Page.Visible = false
-                existing.Button.BackgroundColor3 = Color3.fromRGB(24, 24, 38)
+                TweenService:Create(existing.Button, TweenInfo.new(0.18), {
+                    BackgroundColor3 = Color3.fromRGB(18, 14, 40),
+                    TextColor3 = Color3.fromRGB(180, 170, 220)
+                }):Play()
             end
             tab.Page.Visible = true
-            tab.Button.BackgroundColor3 = Color3.fromRGB(0, 135, 215)
+            TweenService:Create(tab.Button, TweenInfo.new(0.18), {
+                BackgroundColor3 = Color3.fromRGB(90, 40, 200),
+                TextColor3 = Color3.fromRGB(255, 255, 255)
+            }):Play()
         end
 
         local function addText(parent, text, size, bold)
             local label = Instance.new("TextLabel")
             label.BackgroundTransparency = 1
-            label.Size = UDim2.new(1, 0, 0, size or 20)
+            label.Size = UDim2.new(1, 0, 0, size or 18)
             label.Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham
-            label.TextSize = bold and 14 or 13
-            label.TextColor3 = Color3.fromRGB(235, 235, 245)
+            label.TextSize = bold and 13 or 12
+            label.TextColor3 = Color3.fromRGB(225, 220, 245)
             label.TextXAlignment = Enum.TextXAlignment.Left
             label.TextWrapped = true
             label.Text = tostring(text or "")
@@ -4251,11 +4592,12 @@ local function CreateAnimeModUILibrary()
 
         local function createControlFrame(parent, height)
             local frame = Instance.new("Frame")
-            frame.Size = UDim2.new(1, 0, 0, height or 42)
-            frame.BackgroundColor3 = Color3.fromRGB(21, 21, 34)
+            frame.Size = UDim2.new(1, 0, 0, height or 38)
+            frame.BackgroundColor3 = Color3.fromRGB(16, 12, 32)
             frame.BorderSizePixel = 0
             frame.Parent = parent
             addCorner(frame, 7)
+            addStroke(frame, Color3.fromRGB(50, 30, 100), 1)
             return frame
         end
 
@@ -4263,7 +4605,9 @@ local function CreateAnimeModUILibrary()
             self.Minimized = state and true or false
             tabList.Visible = not self.Minimized
             pages.Visible = not self.Minimized
-            main.Size = self.Minimized and UDim2.new(0, 620, 0, 48) or UDim2.new(0, 620, 0, 420)
+            TweenService:Create(main, TweenInfo.new(0.25, Enum.EasingStyle.Quart), {
+                Size = self.Minimized and UDim2.new(0, 560, 0, 42) or UDim2.new(0, 560, 0, 380)
+            }):Play()
             minimizeButton.Text = self.Minimized and "+" or "—"
         end
 
@@ -4280,35 +4624,52 @@ local function CreateAnimeModUILibrary()
             end
 
             local button = Instance.new("TextButton")
-            button.Size = UDim2.new(1, 0, 0, 34)
-            button.BackgroundColor3 = Color3.fromRGB(24, 24, 38)
+            button.Size = UDim2.new(1, 0, 0, 30)
+            button.BackgroundColor3 = Color3.fromRGB(18, 14, 40)
             button.Text = tabName
-            button.TextColor3 = Color3.fromRGB(255, 255, 255)
+            button.TextColor3 = Color3.fromRGB(180, 170, 220)
             button.Font = Enum.Font.GothamSemibold
-            button.TextSize = 12
+            button.TextSize = 11
             button.TextWrapped = true
             button.Parent = tabList
-            addCorner(button, 6)
+            addCorner(button, 7)
+
+            -- Hover effect
+            button.MouseEnter:Connect(function()
+                if button.BackgroundColor3 ~= Color3.fromRGB(90, 40, 200) then
+                    TweenService:Create(button, TweenInfo.new(0.15), {
+                        BackgroundColor3 = Color3.fromRGB(40, 25, 80)
+                    }):Play()
+                end
+            end)
+            button.MouseLeave:Connect(function()
+                if button.BackgroundColor3 ~= Color3.fromRGB(90, 40, 200) then
+                    TweenService:Create(button, TweenInfo.new(0.15), {
+                        BackgroundColor3 = Color3.fromRGB(18, 14, 40)
+                    }):Play()
+                end
+            end)
 
             local page = Instance.new("ScrollingFrame")
             page.Name = tabName
             page.Size = UDim2.new(1, 0, 1, 0)
             page.BackgroundTransparency = 1
             page.BorderSizePixel = 0
-            page.ScrollBarThickness = 4
+            page.ScrollBarThickness = 3
             page.CanvasSize = UDim2.new(0, 0, 0, 0)
             page.AutomaticCanvasSize = Enum.AutomaticSize.Y
             page.Visible = false
             page.Parent = pages
 
             local layout = Instance.new("UIListLayout")
-            layout.Padding = UDim.new(0, 8)
+            layout.Padding = UDim.new(0, 6)
             layout.SortOrder = Enum.SortOrder.LayoutOrder
             layout.Parent = page
 
             local padding = Instance.new("UIPadding")
-            padding.PaddingRight = UDim.new(0, 6)
-            padding.PaddingBottom = UDim.new(0, 10)
+            padding.PaddingRight = UDim.new(0, 5)
+            padding.PaddingTop = UDim.new(0, 4)
+            padding.PaddingBottom = UDim.new(0, 8)
             padding.Parent = page
 
             local tab = {Button = button, Page = page}
@@ -4319,41 +4680,71 @@ local function CreateAnimeModUILibrary()
 
             function tab:AddSection(info2)
                 local sectionName = typeof(info2) == "table" and tostring(info2[1] or info2.Name or info2.Title or "Section") or tostring(info2 or "Section")
-                local label = addText(page, sectionName, 24, true)
-                label.TextColor3 = Color3.fromRGB(0, 191, 255)
+                local frame = Instance.new("Frame")
+                frame.Size = UDim2.new(1, 0, 0, 22)
+                frame.BackgroundTransparency = 1
+                frame.Parent = page
+                local label = addText(frame, "  " .. sectionName, 22, true)
+                label.TextColor3 = Color3.fromRGB(140, 100, 255)
+                label.TextSize = 12
+                local divLine = Instance.new("Frame")
+                divLine.Size = UDim2.new(1, -8, 0, 1)
+                divLine.Position = UDim2.new(0, 4, 1, -1)
+                divLine.BackgroundColor3 = Color3.fromRGB(80, 50, 160)
+                divLine.BorderSizePixel = 0
+                divLine.Parent = frame
+                local dg = Instance.new("UIGradient")
+                dg.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(0,0,0)),
+                    ColorSequenceKeypoint.new(0.4, Color3.fromRGB(100, 60, 220)),
+                    ColorSequenceKeypoint.new(0.6, Color3.fromRGB(60, 140, 255)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(0,0,0)),
+                })
+                dg.Parent = divLine
                 return label
             end
 
             function tab:AddDiscordInvite(data)
                 data = data or {}
-                local frame = createControlFrame(page, 58)
-                local name = addText(frame, data.Name or "Discord", 22, true)
-                name.Position = UDim2.new(0, 10, 0, 6)
-                name.Size = UDim2.new(1, -20, 0, 20)
-                local desc = addText(frame, (data.Description or "") .. " " .. (data.Invite or ""), 20, false)
-                desc.Position = UDim2.new(0, 10, 0, 30)
-                desc.Size = UDim2.new(1, -20, 0, 20)
+                local frame = createControlFrame(page, 50)
+                local name = addText(frame, "  " .. (data.Name or "Discord"), 20, true)
+                name.Position = UDim2.new(0, 0, 0, 5)
+                name.Size = UDim2.new(1, -10, 0, 18)
+                name.TextColor3 = Color3.fromRGB(140, 100, 255)
+                local desc = addText(frame, "  " .. (data.Description or "") .. " " .. (data.Invite or ""), 18, false)
+                desc.Position = UDim2.new(0, 0, 0, 26)
+                desc.Size = UDim2.new(1, -10, 0, 18)
+                desc.TextColor3 = Color3.fromRGB(160, 160, 200)
                 return frame
             end
 
             function tab:AddButton(data)
                 data = data or {}
                 local text = data.Name or data.Title or "Button"
-                local frame = createControlFrame(page, 42)
+                local frame = createControlFrame(page, 36)
                 local button2 = Instance.new("TextButton")
-                button2.Size = UDim2.new(1, -12, 1, -10)
-                button2.Position = UDim2.new(0, 6, 0, 5)
-                button2.BackgroundColor3 = Color3.fromRGB(0, 150, 230)
+                button2.Size = UDim2.new(1, -10, 1, -8)
+                button2.Position = UDim2.new(0, 5, 0, 4)
+                button2.BackgroundColor3 = Color3.fromRGB(70, 30, 180)
                 button2.TextColor3 = Color3.fromRGB(255, 255, 255)
                 button2.Font = Enum.Font.GothamBold
-                button2.TextSize = 13
+                button2.TextSize = 12
                 button2.Text = tostring(text)
                 button2.Parent = frame
-                addCorner(button2, 6)
+                addCorner(button2, 7)
+                local bg = Instance.new("UIGradient")
+                bg.Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 40, 210)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 100, 220)),
+                })
+                bg.Rotation = 90
+                bg.Parent = button2
                 button2.MouseButton1Click:Connect(function()
-                    pcall(function()
-                        if data.Callback then data.Callback() end
+                    TweenService:Create(button2, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(140, 80, 255)}):Play()
+                    task.delay(0.15, function()
+                        TweenService:Create(button2, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(70, 30, 180)}):Play()
                     end)
+                    pcall(function() if data.Callback then data.Callback() end end)
                 end)
                 return button2
             end
@@ -4363,45 +4754,45 @@ local function CreateAnimeModUILibrary()
                 local state = data.Default
                 if state == nil then state = data.Value end
                 state = state and true or false
-                local frame = createControlFrame(page, 52)
-                local label = addText(frame, data.Name or data.Title or "Toggle", 20, true)
-                label.Position = UDim2.new(0, 10, 0, 5)
-                label.Size = UDim2.new(1, -70, 0, 20)
+                local frame = createControlFrame(page, 46)
+                local label = addText(frame, "  " .. (data.Name or data.Title or "Toggle"), 18, true)
+                label.Position = UDim2.new(0, 0, 0, 4)
+                label.Size = UDim2.new(1, -62, 0, 18)
                 local descText = data.Description or data.Desc
                 if descText then
-                    local desc = addText(frame, descText, 18, false)
-                    desc.Position = UDim2.new(0, 10, 0, 27)
-                    desc.Size = UDim2.new(1, -70, 0, 18)
-                    desc.TextColor3 = Color3.fromRGB(175, 185, 200)
+                    frame.Size = UDim2.new(1, 0, 0, 48)
+                    local desc = addText(frame, "  " .. descText, 16, false)
+                    desc.Position = UDim2.new(0, 0, 0, 26)
+                    desc.Size = UDim2.new(1, -62, 0, 16)
+                    desc.TextColor3 = Color3.fromRGB(140, 130, 180)
+                    desc.TextSize = 10
                 end
                 local switch = Instance.new("TextButton")
-                switch.Size = UDim2.new(0, 48, 0, 26)
-                switch.Position = UDim2.new(1, -58, 0, 13)
+                switch.Size = UDim2.new(0, 44, 0, 22)
+                switch.Position = UDim2.new(1, -50, 0, 12)
                 switch.Font = Enum.Font.GothamBold
-                switch.TextSize = 12
+                switch.TextSize = 10
                 switch.TextColor3 = Color3.fromRGB(255, 255, 255)
                 switch.Parent = frame
-                addCorner(switch, 13)
-                local function render()
-                    switch.Text = state and "ON" or "OFF"
-                    switch.BackgroundColor3 = state and Color3.fromRGB(0, 190, 120) or Color3.fromRGB(80, 80, 95)
+                addCorner(switch, 11)
+                local function updateSwitch()
+                    if state then
+                        TweenService:Create(switch, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(100, 50, 220)}):Play()
+                        switch.Text = "ON"
+                    else
+                        TweenService:Create(switch, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 25, 60)}):Play()
+                        switch.Text = "OFF"
+                    end
                 end
-                render()
+                updateSwitch()
                 switch.MouseButton1Click:Connect(function()
                     state = not state
-                    render()
-                    pcall(function()
-                        if data.Callback then data.Callback(state) end
-                    end)
+                    updateSwitch()
+                    pcall(function() if data.Callback then data.Callback(state) end end)
                 end)
                 local obj = {}
-                function obj:Set(value)
-                    state = value and true or false
-                    render()
-                    pcall(function()
-                        if data.Callback then data.Callback(state) end
-                    end)
-                end
+                function obj:Set(v) state = v and true or false; updateSwitch() end
+                function obj:Get() return state end
                 return obj
             end
 
@@ -4410,30 +4801,31 @@ local function CreateAnimeModUILibrary()
                 local options = data.Options or data.Values or {}
                 local selected = data.Default or options[1] or "Select"
                 local open = false
-                local itemHeight = 26
-                local frame = createControlFrame(page, 58)
-                local label = addText(frame, data.Name or data.Title or "Dropdown", 20, true)
-                label.Position = UDim2.new(0, 10, 0, 5)
-                label.Size = UDim2.new(1, -20, 0, 20)
+                local itemHeight = 24
+                local frame = createControlFrame(page, 52)
+                local label = addText(frame, "  " .. (data.Name or data.Title or "Dropdown"), 18, true)
+                label.Position = UDim2.new(0, 0, 0, 4)
+                label.Size = UDim2.new(1, -10, 0, 18)
                 local button2 = Instance.new("TextButton")
-                button2.Size = UDim2.new(1, -20, 0, 26)
-                button2.Position = UDim2.new(0, 10, 0, 28)
-                button2.BackgroundColor3 = Color3.fromRGB(31, 31, 48)
-                button2.TextColor3 = Color3.fromRGB(255, 255, 255)
+                button2.Size = UDim2.new(1, -16, 0, 24)
+                button2.Position = UDim2.new(0, 8, 0, 26)
+                button2.BackgroundColor3 = Color3.fromRGB(22, 16, 50)
+                button2.TextColor3 = Color3.fromRGB(220, 210, 255)
                 button2.Font = Enum.Font.Gotham
-                button2.TextSize = 12
-                button2.Text = tostring(selected) .. "  ▼"
+                button2.TextSize = 11
+                button2.Text = tostring(selected) .. "  ▾"
                 button2.Parent = frame
                 addCorner(button2, 6)
 
                 local list = Instance.new("Frame")
-                list.Size = UDim2.new(1, -20, 0, 0)
-                list.Position = UDim2.new(0, 10, 0, 57)
-                list.BackgroundColor3 = Color3.fromRGB(18, 18, 30)
+                list.Size = UDim2.new(1, -16, 0, 0)
+                list.Position = UDim2.new(0, 8, 0, 53)
+                list.BackgroundColor3 = Color3.fromRGB(14, 10, 32)
                 list.BorderSizePixel = 0
                 list.ClipsDescendants = true
                 list.Parent = frame
                 addCorner(list, 6)
+                addStroke(list, Color3.fromRGB(60, 40, 140), 1)
                 local listLayout = Instance.new("UIListLayout")
                 listLayout.Parent = list
 
@@ -4446,20 +4838,19 @@ local function CreateAnimeModUILibrary()
                         local item = Instance.new("TextButton")
                         item.Size = UDim2.new(1, 0, 0, itemHeight)
                         item.BackgroundTransparency = 1
-                        item.TextColor3 = Color3.fromRGB(235, 235, 245)
+                        item.TextColor3 = Color3.fromRGB(210, 200, 240)
                         item.Font = Enum.Font.Gotham
-                        item.TextSize = 12
-                        item.Text = tostring(option)
+                        item.TextSize = 11
+                        item.Text = "  " .. tostring(option)
+                        item.TextXAlignment = Enum.TextXAlignment.Left
                         item.Parent = list
                         item.MouseButton1Click:Connect(function()
                             selected = option
                             open = false
-                            button2.Text = tostring(selected) .. "  ▼"
-                            frame.Size = UDim2.new(1, 0, 0, 58)
-                            list.Size = UDim2.new(1, -20, 0, 0)
-                            pcall(function()
-                                if data.Callback then data.Callback(selected) end
-                            end)
+                            button2.Text = tostring(selected) .. "  ▾"
+                            TweenService:Create(frame, TweenInfo.new(0.18), {Size = UDim2.new(1, 0, 0, 52)}):Play()
+                            TweenService:Create(list, TweenInfo.new(0.18), {Size = UDim2.new(1, -16, 0, 0)}):Play()
+                            pcall(function() if data.Callback then data.Callback(selected) end end)
                         end)
                     end
                 end
@@ -4467,27 +4858,23 @@ local function CreateAnimeModUILibrary()
 
                 button2.MouseButton1Click:Connect(function()
                     open = not open
-                    local visibleCount = math.min(#options, 6)
+                    local visibleCount = math.min(#options, 5)
                     local listSize = open and visibleCount * itemHeight or 0
-                    frame.Size = UDim2.new(1, 0, 0, 58 + listSize)
-                    list.Size = UDim2.new(1, -20, 0, listSize)
-                    button2.Text = tostring(selected) .. (open and "  ▲" or "  ▼")
+                    TweenService:Create(frame, TweenInfo.new(0.18), {Size = UDim2.new(1, 0, 0, 52 + listSize)}):Play()
+                    TweenService:Create(list, TweenInfo.new(0.18), {Size = UDim2.new(1, -16, 0, listSize)}):Play()
+                    button2.Text = tostring(selected) .. (open and "  ▴" or "  ▾")
                 end)
 
                 local obj = {}
                 function obj:Set(value)
                     selected = value
-                    button2.Text = tostring(selected) .. "  ▼"
-                    pcall(function()
-                        if data.Callback then data.Callback(selected) end
-                    end)
+                    button2.Text = tostring(selected) .. "  ▾"
+                    pcall(function() if data.Callback then data.Callback(selected) end end)
                 end
                 function obj:Refresh(newOptions, keepCurrent)
                     rebuild(newOptions or {})
-                    if not keepCurrent then
-                        selected = options[1]
-                    end
-                    button2.Text = tostring(selected or "Select") .. "  ▼"
+                    if not keepCurrent then selected = options[1] end
+                    button2.Text = tostring(selected or "Select") .. "  ▾"
                 end
                 return obj
             end
@@ -4497,36 +4884,35 @@ local function CreateAnimeModUILibrary()
                 local min = tonumber(data.Min or data.Minimum or 0) or 0
                 local max = tonumber(data.Max or data.Maximum or 100) or 100
                 local value = tonumber(data.Default or data.Value or min) or min
-                local frame = createControlFrame(page, 64)
-                local label = addText(frame, (data.Name or data.Title or "Slider") .. ": " .. tostring(value), 22, true)
-                label.Position = UDim2.new(0, 10, 0, 5)
-                label.Size = UDim2.new(1, -20, 0, 20)
+                local frame = createControlFrame(page, 56)
+                local label = addText(frame, "  " .. (data.Name or data.Title or "Slider") .. ": " .. tostring(value), 20, true)
+                label.Position = UDim2.new(0, 0, 0, 4)
+                label.Size = UDim2.new(1, -10, 0, 18)
+                local btnSize = UDim2.new(0, 30, 0, 24)
                 local minus = Instance.new("TextButton")
-                minus.Size = UDim2.new(0, 34, 0, 28)
-                minus.Position = UDim2.new(0, 10, 0, 30)
-                minus.BackgroundColor3 = Color3.fromRGB(31, 31, 48)
-                minus.Text = "-"
-                minus.TextColor3 = Color3.fromRGB(255, 255, 255)
+                minus.Size = btnSize
+                minus.Position = UDim2.new(0, 8, 0, 28)
+                minus.BackgroundColor3 = Color3.fromRGB(40, 20, 90)
+                minus.Text = "−"
+                minus.TextColor3 = Color3.fromRGB(200, 180, 255)
                 minus.Font = Enum.Font.GothamBold
-                minus.TextSize = 18
+                minus.TextSize = 16
                 minus.Parent = frame
                 addCorner(minus, 6)
                 local plus = Instance.new("TextButton")
-                plus.Size = UDim2.new(0, 34, 0, 28)
-                plus.Position = UDim2.new(1, -44, 0, 30)
-                plus.BackgroundColor3 = Color3.fromRGB(31, 31, 48)
+                plus.Size = btnSize
+                plus.Position = UDim2.new(1, -38, 0, 28)
+                plus.BackgroundColor3 = Color3.fromRGB(70, 30, 180)
                 plus.Text = "+"
                 plus.TextColor3 = Color3.fromRGB(255, 255, 255)
                 plus.Font = Enum.Font.GothamBold
-                plus.TextSize = 18
+                plus.TextSize = 16
                 plus.Parent = frame
                 addCorner(plus, 6)
                 local function setValue(newValue)
                     value = math.clamp(tonumber(newValue) or value, min, max)
-                    label.Text = (data.Name or data.Title or "Slider") .. ": " .. tostring(value)
-                    pcall(function()
-                        if data.Callback then data.Callback(value) end
-                    end)
+                    label.Text = "  " .. (data.Name or data.Title or "Slider") .. ": " .. tostring(value)
+                    pcall(function() if data.Callback then data.Callback(value) end end)
                 end
                 minus.MouseButton1Click:Connect(function() setValue(value - 1) end)
                 plus.MouseButton1Click:Connect(function() setValue(value + 1) end)
@@ -4537,29 +4923,29 @@ local function CreateAnimeModUILibrary()
 
             function tab:AddParagraph(data)
                 data = data or {}
-                local frame = createControlFrame(page, 96)
-                local title2 = addText(frame, data.Title or data.Name or "Info", 20, true)
-                title2.Position = UDim2.new(0, 10, 0, 6)
-                title2.Size = UDim2.new(1, -20, 0, 20)
-                local content = addText(frame, data.Content or data.Text or "", 66, false)
-                content.Position = UDim2.new(0, 10, 0, 30)
-                content.Size = UDim2.new(1, -20, 0, 60)
+                local frame = createControlFrame(page, 80)
+                local title2 = addText(frame, "  " .. (data.Title or data.Name or "Info"), 18, true)
+                title2.Position = UDim2.new(0, 0, 0, 4)
+                title2.Size = UDim2.new(1, -10, 0, 18)
+                title2.TextColor3 = Color3.fromRGB(140, 100, 255)
+                local content = addText(frame, data.Content or data.Text or "", 56, false)
+                content.Position = UDim2.new(0, 8, 0, 24)
+                content.Size = UDim2.new(1, -16, 0, 50)
                 content.TextYAlignment = Enum.TextYAlignment.Top
+                content.TextColor3 = Color3.fromRGB(190, 180, 230)
                 local obj = {}
                 function obj:Set(newText)
                     content.Text = tostring(newText or "")
                     local lines = 1
                     for _ in string.gmatch(content.Text, "\n") do lines = lines + 1 end
-                    frame.Size = UDim2.new(1, 0, 0, math.max(96, 36 + (lines * 16)))
-                    content.Size = UDim2.new(1, -20, 0, frame.Size.Y.Offset - 36)
+                    frame.Size = UDim2.new(1, 0, 0, math.max(80, 30 + (lines * 15)))
+                    content.Size = UDim2.new(1, -16, 0, frame.Size.Y.Offset - 30)
                 end
                 return obj
             end
 
             table.insert(window.Tabs, tab)
-            if #window.Tabs == 1 then
-                setActiveTab(tab)
-            end
+            if #window.Tabs == 1 then setActiveTab(tab) end
 
             return tab
         end
@@ -4569,6 +4955,7 @@ local function CreateAnimeModUILibrary()
 
     return library
 end
+
 
 local v466
 local ui_loaded = false
