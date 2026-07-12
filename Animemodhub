@@ -1278,18 +1278,24 @@ local function startKeyGate(onSuccess)
                 -- người chơi không thấy gì cả (GUI key-gate đã bị Destroy ở trên rồi), nên
                 -- cảm giác y hệt "crash" dù key đúng. Giờ luôn hiện notification rõ ràng
                 -- + toast để người chơi biết cần Rejoin/thử lại thay vì im lặng.
-                local ok, err = pcall(onSuccess)
-                if not ok then
-                    warn("[AnimeModHub] onSuccess error: " .. tostring(err))
-                    pcall(function()
-                        game:GetService("StarterGui"):SetCore("SendNotification", {
-                            Title = "❌ ANIME MOD HUB";
-                            Text = "Không thể tải menu chức năng: " .. tostring(err) .. " — vui lòng thử Rejoin server.";
-                            Duration = 10;
-                        })
-                    end)
-                    showToast("Lỗi tải menu! Vui lòng Rejoin server và thử lại.", nil, "error")
-                end
+                -- FIX v9.1.3.4: task.defer → onSuccess chạy ở FRAME TIẾP THEO sau khi
+                -- verify-thread kết thúc. Điều này cho phép Roblox hoàn tất render frame
+                -- hiện tại (animation fade key-gate) và xử lý input trước khi script
+                -- nặng bắt đầu khởi tạo → menu không bị "đơ" ngay khi mở lần đầu.
+                task.defer(function()
+                    local ok, err = pcall(onSuccess)
+                    if not ok then
+                        warn("[AnimeModHub] onSuccess error: " .. tostring(err))
+                        pcall(function()
+                            game:GetService("StarterGui"):SetCore("SendNotification", {
+                                Title = "❌ ANIME MOD HUB";
+                                Text = "Không thể tải menu chức năng: " .. tostring(err) .. " — vui lòng thử Rejoin server.";
+                                Duration = 10;
+                            })
+                        end)
+                        showToast("Lỗi tải menu! Vui lòng Rejoin server và thử lại.", nil, "error")
+                    end
+                end)
             else
                 -- ── KEY KHÔNG HỢP LỆ ──
                 local reason = result.reason or "unknown"
@@ -1438,9 +1444,13 @@ end
 -- ════════════════════════════════════════════════════════
 --  TỐI ƯU LAG — giảm render + tắt shadows + giới hạn FPS
 -- ════════════════════════════════════════════════════════
+-- FIX v9.1.3.4: tách thành 2 bước để không block luồng tạo menu:
+-- (1) Lighting/settings áp dụng ngay (tức thì, nhẹ).
+-- (2) Particle loop + StreamingEnabled chạy trong task.spawn riêng —
+--     vòng lặp workspace:GetDescendants() trên map Blox Fruits có thể
+--     duyệt hàng nghìn object → block nhiều frame nếu để synchronous.
 pcall(function()
     local Lighting = game:GetService("Lighting")
-    local workspace = game:GetService("Workspace")
     -- Tắt hiệu ứng nặng
     Lighting.GlobalShadows = false
     Lighting.FogEnd = 9e9
@@ -1450,14 +1460,19 @@ pcall(function()
     -- Giảm MaxActiveSoundsCount
     SoundService = game:GetService("SoundService")
     SoundService.DistanceFactor = 3.33
-    -- Tắt particles trong workspace (giảm lag)
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
-            v.Enabled = false
+end)
+task.spawn(function()
+    pcall(function()
+        -- Tắt particles trong workspace (chạy async — không block menu)
+        local workspace = game:GetService("Workspace")
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+                v.Enabled = false
+            end
         end
-    end
-    -- Throttle update rate cho decorative objects
-    workspace.StreamingEnabled = false
+        -- Throttle update rate cho decorative objects
+        workspace.StreamingEnabled = false
+    end)
 end)
 
 
@@ -5325,6 +5340,9 @@ local function CreateAnimeModUILibrary()
         -- ─── TOUCH DRAG-TO-SCROLL cho tabList (mobile) ───────────
         -- ScrollingFrame không auto-scroll trên mobile khi chứa TextButton
         -- → thêm drag thủ công: vuốt lên/xuống để cuộn menu
+        -- FIX v9.1.3.3: khai báo _scrollBtnsRef trước các do-block để tránh
+        -- dùng window trước khi nó được khai báo (gây freeze menu)
+        local _scrollBtnsRef = nil
         do
             local UIS = game:GetService("UserInputService")
             local _tDragging   = false
@@ -5492,11 +5510,9 @@ local function CreateAnimeModUILibrary()
             attachHold(upBtn, -1)
             attachHold(dnBtn,  1)
 
-            -- Ẩn/hiện nút theo trạng thái minimize
-            local _origMinimize = window.Minimize
-            -- Sẽ patch sau khi window.Minimize được định nghĩa (xem bên dưới)
-            -- Lưu ref để patch
-            rawset(window, "_scrollBtns", {upBtn, dnBtn})
+            -- Lưu upBtn/dnBtn để patch vào window sau khi window được khai báo
+            -- (KHÔNG dùng window.Minimize hay rawset(window,...) ở đây vì window chưa tồn tại)
+            _scrollBtnsRef = {upBtn, dnBtn}
         end
 
         -- ─── PAGES ───────────────────────────────────────────────
@@ -5510,6 +5526,12 @@ local function CreateAnimeModUILibrary()
         makeDraggable(main, top)
 
         local window = {Tabs = {}, Gui = gui, Main = main, Minimized = false}
+
+        -- Gán _scrollBtns vào window SAU KHI window đã được khai báo
+        if _scrollBtnsRef then
+            window._scrollBtns = _scrollBtnsRef
+            _scrollBtnsRef = nil
+        end
 
         local function setActiveTab(tab)
             for _, existing in ipairs(window.Tabs) do
@@ -5644,10 +5666,10 @@ local function CreateAnimeModUILibrary()
             resizeHandle.Visible = not self.Minimized
             minimizeButton.Text = self.Minimized and "+" or "—"
             -- Ẩn/hiện nút cuộn ▲▼ cùng với tabList
-            local btns = rawget(self, "_scrollBtns")
+            local btns = self._scrollBtns
             if btns then
                 for _, b in ipairs(btns) do
-                    b.Visible = not self.Minimized
+                    pcall(function() b.Visible = not self.Minimized end)
                 end
             end
         end
@@ -6182,6 +6204,10 @@ end
 -- v473=true → trạng thái toggle đồng bộ với thực tế (menu đang HIỆN)
 -- Block "Ẩn menu ngay từ đầu" cũ đã bị XÓA — đó là nguyên nhân menu bị đơ (mở rồi ẩn ngay)
 v466:Minimize(false)
+-- FIX v9.1.3.4: yield 1 frame sau khi menu hiện → Roblox kịp render frame
+-- và đăng ký input events trước khi bắt đầu tạo tabs + controls (nặng).
+-- Không có dòng này menu visible nhưng "đơ" hoàn toàn trong ~1-3 giây đầu.
+task.wait()
 local v473 = true   -- true = menu đang HIỆN
 local v474 = nil
 local v475 = nil
@@ -6247,6 +6273,9 @@ local v493 = v466:MakeTab({"Teleport","rbxassetid://116828114235759"})
 local v494 = v466:MakeTab({"PvP,Player","rbxassetid://116828114235759"})
 local v495 = v466:MakeTab({"Shop","rbxassetid://116828114235759"})
 local v496 = v466:MakeTab({"Settings","rbxassetid://116828114235759"})
+-- FIX v9.1.3.4: yield sau khi tạo xong toàn bộ tabs → Roblox render tab buttons
+-- lên màn hình và cho phép click trước khi tiếp tục tạo controls (hàng trăm element).
+task.wait()
 -- ── Thông tin HSD động ──
 local hsdParagraph = v484:AddParagraph({
     Title = "📅  Hạn Sử Dụng Key (HSD)",
