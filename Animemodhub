@@ -540,8 +540,16 @@ local function createKeyGUI()
         task.delay(0.15, function()
             TweenService:Create(BuyKeyFrame, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(12, 8, 28)}):Play()
         end)
-        -- Hiện thông báo mua key
-        showToast("🛒 Vào server Discord để mua key!", Color3.fromRGB(160, 100, 20))
+        -- Copy link Discord vào clipboard và hiển thị thông báo
+        local buyLink = "https://discord.gg/devgatinho"
+        pcall(function()
+            if setclipboard then
+                setclipboard(buyLink)
+                showToast("📋 Đã copy link Discord! Paste vào browser để mua key.", Color3.fromRGB(140, 80, 20))
+            else
+                showToast("🛒 Tham gia Discord: discord.gg/devgatinho để mua key!", Color3.fromRGB(140, 80, 20))
+            end
+        end)
     end)
 
     -- ═══════════════════════════════════════════════
@@ -581,6 +589,80 @@ end
 
 -- ──────────────────────────────────────────────────────────
 --  Xác thực key với server
+-- ──────────────────────────────────────────────────────────
+--  Auto-save / load key từ writefile/readfile
+-- ──────────────────────────────────────────────────────────
+local SAVE_FILE = "AnimeModHub_SavedKey.txt"
+local _savedKeyData = { key = "", keyType = "NORMAL", expireTime = 0 }
+
+local function loadSavedKey()
+    local ok, data = pcall(function()
+        if isfile and isfile(SAVE_FILE) then
+            return HttpService:JSONDecode(readfile(SAVE_FILE))
+        end
+    end)
+    if ok and data and data.key and data.key ~= "" then
+        _savedKeyData = data
+        return data
+    end
+    return nil
+end
+
+local function saveKey(key, keyType, expireTime)
+    pcall(function()
+        if writefile then
+            writefile(SAVE_FILE, HttpService:JSONEncode({
+                key = key,
+                keyType = keyType or "NORMAL",
+                expireTime = expireTime or 0
+            }))
+        end
+    end)
+    _savedKeyData.key = key
+    _savedKeyData.keyType = keyType or "NORMAL"
+    _savedKeyData.expireTime = expireTime or 0
+end
+
+-- ──────────────────────────────────────────────────────────
+--  Background key checker (kiểm tra key ngầm mỗi 60s)
+-- ──────────────────────────────────────────────────────────
+local _bgCheckActive = false
+local _onKeyInvalidCallback = nil
+
+local function startBackgroundKeyCheck(key, onInvalid)
+    if _bgCheckActive then return end
+    _bgCheckActive = true
+    _onKeyInvalidCallback = onInvalid
+    task.spawn(function()
+        while _bgCheckActive do
+            task.wait(60) -- kiểm tra mỗi 60 giây
+            if not _bgCheckActive then break end
+            local url = SERVER_URL .. "/api/verify?key=" .. HttpService:UrlEncode(key) .. "&app=" .. HttpService:UrlEncode(APP_ID)
+            local ok, result = pcall(function()
+                local resp = game:HttpGet(url)
+                return HttpService:JSONDecode(resp)
+            end)
+            if ok and result then
+                if not result.valid then
+                    local reason = result.reason or "unknown"
+                    -- Key bị ban hoặc hết hạn → auto quay về màn đăng nhập
+                    if reason == "expired" or reason == "banned" or reason == "key_not_found" then
+                        _bgCheckActive = false
+                        if _onKeyInvalidCallback then
+                            _onKeyInvalidCallback(reason)
+                        end
+                        break
+                    end
+                end
+            end
+        end
+    end)
+end
+
+local function stopBackgroundKeyCheck()
+    _bgCheckActive = false
+end
+
 -- ──────────────────────────────────────────────────────────
 local function verifyKey(key, callback)
     local url = SERVER_URL .. "/api/verify?key=" .. HttpService:UrlEncode(key) .. "&app=" .. HttpService:UrlEncode(APP_ID)
@@ -662,14 +744,64 @@ local ERROR_MESSAGES = {
 }
 
 -- ──────────────────────────────────────────────────────────
+--  Format thời gian hết hạn từ timestamp
+-- ──────────────────────────────────────────────────────────
+local function formatExpiry(expireTimestamp)
+    if not expireTimestamp or expireTimestamp == 0 then
+        return "Không xác định"
+    end
+    -- expireTimestamp là Unix timestamp (giây)
+    local now = os.time()
+    local diff = expireTimestamp - now
+    if diff <= 0 then
+        return "ĐÃ HẾT HẠN"
+    end
+    local days = math.floor(diff / 86400)
+    local hours = math.floor((diff % 86400) / 3600)
+    local mins = math.floor((diff % 3600) / 60)
+    if days > 0 then
+        return string.format("%d ngày %d giờ %d phút", days, hours, mins)
+    elseif hours > 0 then
+        return string.format("%d giờ %d phút", hours, mins)
+    else
+        return string.format("%d phút", mins)
+    end
+end
+
+-- ──────────────────────────────────────────────────────────
 --  Khởi động key gate
 -- ──────────────────────────────────────────────────────────
 local keyVerified = false
+local _currentVerifiedKey = ""
+local _currentKeyType = "NORMAL"
+local _currentExpireTime = 0
 
 local function startKeyGate(onSuccess)
     local gui, btn, input, errLabel, btnLabel, inputStroke = createKeyGUI()
 
+    -- Auto-fill key đã lưu
+    local savedData = loadSavedKey()
+    if savedData and savedData.key and savedData.key ~= "" then
+        input.Text = savedData.key
+        -- Hiện gợi ý
+        task.delay(0.3, function()
+            if errLabel and errLabel.Parent then
+                errLabel.Text = "💾 Key đã lưu được tự động điền"
+                errLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+                errLabel.BackgroundTransparency = 0.5
+                task.delay(2, function()
+                    if errLabel and errLabel.Parent then
+                        errLabel.Text = ""
+                        errLabel.BackgroundTransparency = 1
+                        errLabel.TextColor3 = Color3.fromRGB(255, 100, 130)
+                    end
+                end)
+            end
+        end)
+    end
+
     local function setError(msg)
+        errLabel.TextColor3 = Color3.fromRGB(255, 100, 130)
         errLabel.Text = msg
         errLabel.BackgroundTransparency = 0.3
         -- Rung card
@@ -692,7 +824,55 @@ local function startKeyGate(onSuccess)
 
     local function setLoading(loading)
         btn.Active = not loading
-        btnLabel.Text = loading and "⏳  Đang xác thực..." or "✔  Xác Thực Key"
+        btnLabel.Text = loading and "⏳  Đang xác thực..." or "⚡  XÁC THỰC KEY  ⚡"
+    end
+
+    -- ── Hiệu ứng VIP khi xác thực thành công ──
+    local function playVipSuccessEffect(card)
+        -- Mưa sao vàng + glow chớp
+        local colors = {
+            Color3.fromRGB(255, 215, 0),
+            Color3.fromRGB(255, 100, 220),
+            Color3.fromRGB(100, 220, 255),
+            Color3.fromRGB(180, 100, 255),
+        }
+        for i = 1, 18 do
+            task.spawn(function()
+                local star = Instance.new("TextLabel")
+                star.BackgroundTransparency = 1
+                star.Text = ({"⭐","🌟","✨","💫","👑"})[math.random(5)]
+                star.TextSize = math.random(14, 22)
+                star.TextColor3 = colors[math.random(#colors)]
+                star.Size = UDim2.new(0, 28, 0, 28)
+                star.Position = UDim2.new(math.random(5, 90)/100, 0, math.random(10, 85)/100, 0)
+                star.ZIndex = 20
+                star.Parent = card
+                TweenService:Create(star, TweenInfo.new(1.1, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                    Position = star.Position + UDim2.new(0, math.random(-40, 40), -0.3, 0),
+                    TextTransparency = 1,
+                }):Play()
+                task.delay(1.15, function()
+                    if star and star.Parent then star:Destroy() end
+                end)
+            end)
+            task.wait(0.04)
+        end
+    end
+
+    -- ── Hiệu ứng thường khi xác thực thành công ──
+    local function playNormalSuccessEffect(card)
+        local flash = Instance.new("Frame")
+        flash.Size = UDim2.fromScale(1, 1)
+        flash.BackgroundColor3 = Color3.fromRGB(50, 200, 80)
+        flash.BackgroundTransparency = 0.7
+        flash.ZIndex = 19
+        flash.BorderSizePixel = 0
+        flash.Parent = card
+        Instance.new("UICorner", flash).CornerRadius = UDim.new(0, 18)
+        TweenService:Create(flash, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+        task.delay(0.55, function()
+            if flash and flash.Parent then flash:Destroy() end
+        end)
     end
 
     local function doVerify()
@@ -712,22 +892,87 @@ local function startKeyGate(onSuccess)
 
                 if result.valid then
                     keyVerified = true
-                    -- Đổi màu input stroke sang xanh lá
+                    _currentVerifiedKey = key
+                    -- Xác định loại key từ server response
+                    local keyType = "NORMAL"
+                    if result.keyType then
+                        keyType = tostring(result.keyType):upper()
+                    elseif result.tier then
+                        keyType = tostring(result.tier):upper()
+                    elseif result.premium or result.isPremium then
+                        keyType = "PREMIUM"
+                    end
+                    _currentKeyType = keyType
+
+                    -- Lấy expire time
+                    local expireTime = 0
+                    if result.expireTime then
+                        expireTime = tonumber(result.expireTime) or 0
+                    elseif result.expire then
+                        expireTime = tonumber(result.expire) or 0
+                    elseif result.hsd then
+                        expireTime = tonumber(result.hsd) or 0
+                    end
+                    _currentExpireTime = expireTime
+
+                    -- Lưu key thành công
+                    saveKey(key, keyType, expireTime)
+
+                    -- Đổi màu input stroke
                     inputStroke.Color = Color3.fromRGB(50, 200, 80)
-                    showToast("✅ Key hợp lệ! Đang tải script...", Color3.fromRGB(30, 140, 60))
-                    task.wait(0.8)
-                    -- Fade out overlay
-                    TweenService:Create(gui:FindFirstChild("Overlay"), TweenInfo.new(0.4), {
-                        BackgroundTransparency = 1
-                    }):Play()
-                    TweenService:Create(gui:FindFirstChild("Card"), TweenInfo.new(0.4), {
-                        BackgroundTransparency = 1
-                    }):Play()
+
+                    local card = gui:FindFirstChild("Card")
+                    if keyType == "PREMIUM" or keyType == "VIP" then
+                        -- Hiệu ứng VIP
+                        showToast("👑 KEY PREMIUM! Đang tải script...", Color3.fromRGB(180, 120, 0))
+                        if card then playVipSuccessEffect(card) end
+                        task.wait(1.2)
+                    else
+                        showToast("✅ Key hợp lệ! Đang tải script...", Color3.fromRGB(30, 140, 60))
+                        if card then playNormalSuccessEffect(card) end
+                        task.wait(0.8)
+                    end
+
+                    -- Fade out
+                    local overlay = gui:FindFirstChild("Overlay")
+                    if overlay then
+                        TweenService:Create(overlay, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+                    end
+                    if card then
+                        TweenService:Create(card, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+                    end
                     task.wait(0.45)
                     gui:Destroy()
+
+                    -- Bắt đầu background checker
+                    startBackgroundKeyCheck(key, function(reason)
+                        -- Key hết hạn / bị ban → destroy main UI, hiện lại key gate
+                        stopBackgroundKeyCheck()
+                        keyVerified = false
+                        -- Huỷ các GUI hiện tại
+                        local cg = game:GetService("CoreGui")
+                        if cg:FindFirstChild("AnimeModHubEmbeddedUI") then
+                            cg:FindFirstChild("AnimeModHubEmbeddedUI"):Destroy()
+                        end
+                        if cg:FindFirstChild("ControlGUI") then
+                            cg:FindFirstChild("ControlGUI"):Destroy()
+                        end
+                        local pg = LocalPlayer.PlayerGui
+                        if pg:FindFirstChild("KeyToastGui") then
+                            pg:FindFirstChild("KeyToastGui"):Destroy()
+                        end
+                        -- Hiện thông báo
+                        local msg = ERROR_MESSAGES[reason] or "⚠️ Key không còn hợp lệ!"
+                        showToast("🚫 " .. msg .. " Vui lòng đăng nhập lại.", Color3.fromRGB(180, 30, 30))
+                        task.wait(1.5)
+                        -- Quay lại màn đăng nhập
+                        startKeyGate(onSuccess)
+                    end)
+
                     onSuccess()
                 else
                     local reason = result.reason or "unknown"
+                    -- Giới hạn thiết bị: nhập key lần 2 trên thiết bị khác sẽ bị chặn
                     local msg = ERROR_MESSAGES[reason] or ("❌ Key không hợp lệ (" .. reason .. ")")
                     setError(msg)
                     inputStroke.Color = Color3.fromRGB(200, 50, 50)
@@ -4718,12 +4963,70 @@ local function CreateAnimeModUILibrary()
             return frame
         end
 
+        -- ── Resize handle (góc phải dưới) ────────────────────
+        local resizeHandle = Instance.new("TextButton")
+        resizeHandle.Name = "ResizeHandle"
+        resizeHandle.Size = UDim2.new(0, 20, 0, 20)
+        resizeHandle.Position = UDim2.new(1, -20, 1, -20)
+        resizeHandle.BackgroundColor3 = Color3.fromRGB(80, 50, 180)
+        resizeHandle.BackgroundTransparency = 0.3
+        resizeHandle.Text = "↘"
+        resizeHandle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        resizeHandle.Font = Enum.Font.GothamBold
+        resizeHandle.TextSize = 11
+        resizeHandle.ZIndex = 5
+        resizeHandle.Parent = main
+        addCorner(resizeHandle, 4)
+        -- Tooltip label
+        local resizeTooltip = Instance.new("TextLabel")
+        resizeTooltip.Size = UDim2.new(0, 100, 0, 16)
+        resizeTooltip.Position = UDim2.new(1, -122, 1, -18)
+        resizeTooltip.BackgroundTransparency = 1
+        resizeTooltip.Text = "Kéo để thay đổi cỡ"
+        resizeTooltip.TextColor3 = Color3.fromRGB(120, 100, 200)
+        resizeTooltip.Font = Enum.Font.Gotham
+        resizeTooltip.TextSize = 9
+        resizeTooltip.TextXAlignment = Enum.TextXAlignment.Right
+        resizeTooltip.ZIndex = 5
+        resizeTooltip.Visible = false
+        resizeTooltip.Parent = main
+        resizeHandle.MouseEnter:Connect(function() resizeTooltip.Visible = true end)
+        resizeHandle.MouseLeave:Connect(function() resizeTooltip.Visible = false end)
+        -- Resize drag logic
+        local _rDragging = false
+        local _rStart, _rStartSize
+        local MIN_W, MIN_H = 380, 280
+        local MAX_W, MAX_H = 900, 700
+        resizeHandle.InputBegan:Connect(function(inp)
+            if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+                _rDragging = true
+                _rStart = inp.Position
+                _rStartSize = Vector2.new(main.AbsoluteSize.X, main.AbsoluteSize.Y)
+                inp.Changed:Connect(function()
+                    if inp.UserInputState == Enum.UserInputState.End then
+                        _rDragging = false
+                    end
+                end)
+            end
+        end)
+        game:GetService("UserInputService").InputChanged:Connect(function(inp)
+            if _rDragging and (inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch) then
+                local delta = inp.Position - _rStart
+                local newW = math.clamp(_rStartSize.X + delta.X, MIN_W, MAX_W)
+                local newH = math.clamp(_rStartSize.Y + delta.Y, MIN_H, MAX_H)
+                main.Size = UDim2.new(0, newW, 0, newH)
+                -- Điều chỉnh vị trí để giữ giữa màn hình (optional)
+            end
+        end)
+
         function window:Minimize(state)
             self.Minimized = state and true or false
             tabList.Visible = not self.Minimized
             pages.Visible = not self.Minimized
+            resizeHandle.Visible = not self.Minimized
+            local curW = main.AbsoluteSize.X
             TweenService:Create(main, TweenInfo.new(0.25, Enum.EasingStyle.Quart), {
-                Size = self.Minimized and UDim2.new(0, 560, 0, 42) or UDim2.new(0, 560, 0, 380)
+                Size = self.Minimized and UDim2.new(0, curW, 0, 42) or UDim2.new(0, curW, 0, 380)
             }):Play()
             minimizeButton.Text = self.Minimized and "+" or "—"
         end
@@ -5261,17 +5564,46 @@ local v493 = v466:MakeTab({"Teleport","rbxassetid://116828114235759"})
 local v494 = v466:MakeTab({"PvP,Player","rbxassetid://116828114235759"})
 local v495 = v466:MakeTab({"Shop","rbxassetid://116828114235759"})
 local v496 = v466:MakeTab({"Settings","rbxassetid://116828114235759"})
-v484:AddParagraph({
-    Title = "📅  Hạn Sử Dụng Key",
-    Content = "HSD: Kiểm tra trong server Discord của shop\nKey hết hạn sẽ bị vô hiệu hoá tự động."
+-- ── Thông tin HSD động ──
+local hsdParagraph = v484:AddParagraph({
+    Title = "📅  Hạn Sử Dụng Key (HSD)",
+    Content = "Đang tải thông tin key..."
 })
+-- Cập nhật HSD thực tế sau khi UI load
+task.delay(0.5, function()
+    local function buildHSDText()
+        local keyDisplay = _currentVerifiedKey ~= "" and ("Key: " .. string.sub(_currentVerifiedKey, 1, 8) .. "****") or "Key: Chưa đăng nhập"
+        local typeIcon = (_currentKeyType == "PREMIUM" or _currentKeyType == "VIP") and "👑 PREMIUM" or "🔰 THƯỜNG"
+        local hsdText
+        if _currentExpireTime > 0 then
+            local remaining = formatExpiry(_currentExpireTime)
+            local expireDate = os.date("*!%d/%m/%Y %H:%M", _currentExpireTime)
+            hsdText = "Còn lại: " .. remaining .. "\nHết hạn: " .. expireDate .. " (UTC)"
+        else
+            hsdText = "HSD: Kiểm tra trong server Discord của shop"
+        end
+        return keyDisplay .. "\nLoại key: " .. typeIcon .. "\n" .. hsdText .. "\n\n• Key hết hạn sẽ tự động đăng xuất\n• Mỗi key giới hạn 1 thiết bị"
+    end
+    pcall(function() hsdParagraph:Set(buildHSDText()) end)
+    -- Cập nhật HSD mỗi 60 giây (đếm ngược)
+    task.spawn(function()
+        while task.wait(60) do
+            pcall(function() hsdParagraph:Set(buildHSDText()) end)
+        end
+    end)
+end)
+
 v484:AddParagraph({
-    Title = "⭐  Hiệu Ứng Premium",
-    Content = "• Mở khoá toàn bộ tính năng nâng cao\n• Auto Farm tốc độ cao + bỏ qua cooldown\n• Ưu tiên hỗ trợ & cập nhật sớm nhất\n• Hiệu ứng giao diện đặc biệt (VIP)"
+    Title = "⭐  Hiệu Ứng Premium (VIP)",
+    Content = "• Mở khoá toàn bộ tính năng nâng cao\n• Auto Farm tốc độ cao + bỏ qua cooldown\n• Ưu tiên hỗ trợ & cập nhật sớm nhất\n• Hiệu ứng giao diện đặc biệt (VIP)\n• Hiệu ứng sao vàng khi đăng nhập"
 })
 v484:AddParagraph({
     Title = "🔰  Hiệu Ứng Thường",
     Content = "• Sử dụng các tính năng cơ bản\n• Auto Farm tiêu chuẩn\n• Cập nhật theo phiên bản chính\n• Giao diện mặc định"
+})
+v484:AddParagraph({
+    Title = "ℹ️  Thông Tin Thiết Bị",
+    Content = "• Mỗi key chỉ dùng được trên 1 thiết bị\n• Nhập key lần 2 = vượt quá giới hạn\n• Key bị ban/hết hạn: tự động đăng xuất\n• Auto lưu key khi đăng nhập thành công"
 })
 local _ = v485:AddSection({"Select Melee,Sword,Gun,Fruit"})
 _G.SelectWeapon = "Melee"
