@@ -5459,8 +5459,11 @@ local function CreateAnimeModUILibrary()
             local upBtn  = Instance.new("TextButton")
             local dnBtn  = Instance.new("TextButton")
 
+            -- FIX v9.1.3.2: Dời nút ▲▼ xuống cuối tabList (không đè lên tab buttons)
+            -- upBtn ở sát đáy tabList (1, -48), dnBtn ngay dưới (1, -26)
+            -- ZIndex giữ nguyên = 9 nhưng vị trí không còn che tab buttons nữa
             for i, t in ipairs({
-                {upBtn,  "▲", UDim2.new(0, 6,   0, 48 + 4)},
+                {upBtn,  "▲", UDim2.new(0, 6,   1, -50)},
                 {dnBtn,  "▼", UDim2.new(0, 6,   1, -28)},
             }) do
                 local b, ico, pos = t[1], t[2], t[3]
@@ -6174,8 +6177,11 @@ local function syncPulse()
     GoldRing.Position = UDim2.new(btnPos.X.Scale, btnPos.X.Offset - 2, btnPos.Y.Scale, btnPos.Y.Offset - 2)
 end
 
--- ── Ban đầu menu ẨN, chỉ hiện logo tròn ──
-local v473 = false  -- false = đang ẩn
+-- ── FIX v9.1.3.2: Sau khi key thành công, menu tự mở ngay ──
+-- v473 = true → menu đang HIỆN (khớp với trạng thái thực của main.Visible sau MakeWindow)
+-- Gọi Minimize(false) để đảm bảo main.Visible = true và animation scale-in chạy đúng
+v466:Minimize(false)
+local v473 = true   -- true = đang hiện (menu đã tự mở sau key)
 local v474 = nil
 local v475 = nil
 local v476 = nil
