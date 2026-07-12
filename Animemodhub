@@ -84,10 +84,10 @@ local function createKeyGUI()
     -- ═══════════════════════════════════════════════
     --  CARD CHÍNH với viền gradient anime
     -- ═══════════════════════════════════════════════
-    -- Outer glow frame
+    -- Outer glow frame (nhỏ lại cho mobile)
     local GlowFrame = Instance.new("Frame")
     GlowFrame.Name = "GlowFrame"
-    GlowFrame.Size = UDim2.new(0, 392, 0, 420)
+    GlowFrame.Size = UDim2.new(0, 312, 0, 340)
     GlowFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     GlowFrame.Position = UDim2.fromScale(0.5, 0.5)
     GlowFrame.BackgroundColor3 = Color3.fromRGB(120, 40, 255)
@@ -96,7 +96,7 @@ local function createKeyGUI()
     GlowFrame.ZIndex = 11
     GlowFrame.Parent = ScreenGui
     local GlowCorner = Instance.new("UICorner")
-    GlowCorner.CornerRadius = UDim.new(0, 20)
+    GlowCorner.CornerRadius = UDim.new(0, 18)
     GlowCorner.Parent = GlowFrame
 
     -- Animate glow color
@@ -119,7 +119,7 @@ local function createKeyGUI()
 
     local Card = Instance.new("Frame")
     Card.Name = "Card"
-    Card.Size = UDim2.new(0, 380, 0, 408)
+    Card.Size = UDim2.new(0, 300, 0, 328)
     Card.AnchorPoint = Vector2.new(0.5, 0.5)
     Card.Position = UDim2.fromScale(0.5, 0.5)
     Card.BackgroundColor3 = Color3.fromRGB(10, 10, 22)
@@ -156,16 +156,16 @@ local function createKeyGUI()
         BackgroundTransparency = 0.55
     }):Play()
     -- Scale in animation
-    Card.Size = UDim2.new(0, 200, 0, 200)
+    Card.Size = UDim2.new(0, 160, 0, 160)
     TweenService:Create(Card, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, 380, 0, 408)
+        Size = UDim2.new(0, 300, 0, 328)
     }):Play()
 
     -- ═══════════════════════════════════════════════
     --  TOP BANNER (gradient xanh tím - anime style)
     -- ═══════════════════════════════════════════════
     local TopBanner = Instance.new("Frame")
-    TopBanner.Size = UDim2.new(1, 0, 0, 78)
+    TopBanner.Size = UDim2.new(1, 0, 0, 62)
     TopBanner.BackgroundColor3 = Color3.fromRGB(60, 0, 180)
     TopBanner.BorderSizePixel = 0
     TopBanner.ZIndex = 13
@@ -196,8 +196,8 @@ local function createKeyGUI()
 
     -- ── Avatar anime tròn (giống image 4 - vòng vàng) ──
     local AvatarRing = Instance.new("Frame")
-    AvatarRing.Size = UDim2.new(0, 58, 0, 58)
-    AvatarRing.Position = UDim2.new(0, 10, 0, 10)
+    AvatarRing.Size = UDim2.new(0, 46, 0, 46)
+    AvatarRing.Position = UDim2.new(0, 8, 0, 8)
     AvatarRing.BackgroundColor3 = Color3.fromRGB(255, 200, 30)
     AvatarRing.BorderSizePixel = 0
     AvatarRing.ZIndex = 14
@@ -224,7 +224,7 @@ local function createKeyGUI()
     end)
 
     local AvatarImg = Instance.new("ImageLabel")
-    AvatarImg.Size = UDim2.new(0, 52, 0, 52)
+    AvatarImg.Size = UDim2.new(0, 40, 0, 40)
     AvatarImg.Position = UDim2.new(0, 3, 0, 3)
     AvatarImg.BackgroundColor3 = Color3.fromRGB(20, 10, 40)
     AvatarImg.Image = "rbxassetid://116828114235759"
@@ -238,22 +238,22 @@ local function createKeyGUI()
 
     -- Lightning icons trái phải title
     local IconLeft = Instance.new("TextLabel")
-    IconLeft.Size = UDim2.new(0, 22, 0, 24)
-    IconLeft.Position = UDim2.new(0, 74, 0, 8)
+    IconLeft.Size = UDim2.new(0, 18, 0, 20)
+    IconLeft.Position = UDim2.new(0, 60, 0, 6)
     IconLeft.BackgroundTransparency = 1
     IconLeft.Text = "⚡"
-    IconLeft.TextSize = 16
+    IconLeft.TextSize = 13
     IconLeft.ZIndex = 14
     IconLeft.Parent = TopBanner
 
     -- Title
     local Title = Instance.new("TextLabel")
-    Title.Size = UDim2.new(1, -100, 0, 28)
-    Title.Position = UDim2.new(0, 94, 0, 6)
+    Title.Size = UDim2.new(1, -88, 0, 22)
+    Title.Position = UDim2.new(0, 76, 0, 5)
     Title.BackgroundTransparency = 1
     Title.Text = "ANIME MOD HUB v1.0"
     Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Title.TextSize = 18
+    Title.TextSize = 14
     Title.Font = Enum.Font.GothamBold
     Title.TextXAlignment = Enum.TextXAlignment.Left
     Title.TextStrokeColor3 = Color3.fromRGB(200, 120, 255)
@@ -262,12 +262,12 @@ local function createKeyGUI()
     Title.Parent = TopBanner
 
     local SubTitle = Instance.new("TextLabel")
-    SubTitle.Size = UDim2.new(1, -100, 0, 18)
-    SubTitle.Position = UDim2.new(0, 94, 0, 36)
+    SubTitle.Size = UDim2.new(1, -88, 0, 16)
+    SubTitle.Position = UDim2.new(0, 76, 0, 30)
     SubTitle.BackgroundTransparency = 1
     SubTitle.Text = "【By 👑Dev Gatinho👑】"
     SubTitle.TextColor3 = Color3.fromRGB(200, 190, 255)
-    SubTitle.TextSize = 11
+    SubTitle.TextSize = 9
     SubTitle.Font = Enum.Font.Gotham
     SubTitle.TextXAlignment = Enum.TextXAlignment.Left
     SubTitle.ZIndex = 14
@@ -275,27 +275,27 @@ local function createKeyGUI()
 
     -- Tag nhỏ góc phải
     local TagLabel = Instance.new("TextLabel")
-    TagLabel.Size = UDim2.new(0, 70, 0, 18)
-    TagLabel.Position = UDim2.new(1, -78, 0, 8)
+    TagLabel.Size = UDim2.new(0, 60, 0, 15)
+    TagLabel.Position = UDim2.new(1, -66, 0, 6)
     TagLabel.BackgroundColor3 = Color3.fromRGB(30, 10, 70)
     TagLabel.BackgroundTransparency = 0.2
     TagLabel.Text = "KEY GATE"
     TagLabel.TextColor3 = Color3.fromRGB(200, 160, 255)
-    TagLabel.TextSize = 9
+    TagLabel.TextSize = 8
     TagLabel.Font = Enum.Font.GothamBold
     TagLabel.TextXAlignment = Enum.TextXAlignment.Center
     TagLabel.ZIndex = 14
     TagLabel.Parent = TopBanner
     local TagCorner = Instance.new("UICorner")
-    TagCorner.CornerRadius = UDim.new(0, 6)
+    TagCorner.CornerRadius = UDim.new(0, 5)
     TagCorner.Parent = TagLabel
 
     -- ═══════════════════════════════════════════════
     --  DIVIDER LINE với hiệu ứng shimmer
     -- ═══════════════════════════════════════════════
     local Divider = Instance.new("Frame")
-    Divider.Size = UDim2.new(1, -40, 0, 2)
-    Divider.Position = UDim2.new(0, 20, 0, 86)
+    Divider.Size = UDim2.new(1, -32, 0, 2)
+    Divider.Position = UDim2.new(0, 16, 0, 70)
     Divider.BackgroundColor3 = Color3.fromRGB(100, 60, 220)
     Divider.BorderSizePixel = 0
     Divider.ZIndex = 13
@@ -323,12 +323,12 @@ local function createKeyGUI()
     --  LABEL NHẬP KEY
     -- ═══════════════════════════════════════════════
     local KeyLabel = Instance.new("TextLabel")
-    KeyLabel.Size = UDim2.new(1, -40, 0, 22)
-    KeyLabel.Position = UDim2.new(0, 20, 0, 98)
+    KeyLabel.Size = UDim2.new(1, -32, 0, 18)
+    KeyLabel.Position = UDim2.new(0, 16, 0, 78)
     KeyLabel.BackgroundTransparency = 1
     KeyLabel.Text = "🔑  KEY XÁC THỰC"
     KeyLabel.TextColor3 = Color3.fromRGB(160, 120, 255)
-    KeyLabel.TextSize = 12
+    KeyLabel.TextSize = 11
     KeyLabel.Font = Enum.Font.GothamBold
     KeyLabel.TextXAlignment = Enum.TextXAlignment.Left
     KeyLabel.ZIndex = 13
@@ -338,8 +338,8 @@ local function createKeyGUI()
     --  INPUT FIELD với glow viền
     -- ═══════════════════════════════════════════════
     local InputBG = Instance.new("Frame")
-    InputBG.Size = UDim2.new(1, -40, 0, 48)
-    InputBG.Position = UDim2.new(0, 20, 0, 124)
+    InputBG.Size = UDim2.new(1, -32, 0, 40)
+    InputBG.Position = UDim2.new(0, 16, 0, 100)
     InputBG.BackgroundColor3 = Color3.fromRGB(16, 12, 36)
     InputBG.BorderSizePixel = 0
     InputBG.ZIndex = 13
@@ -398,8 +398,8 @@ local function createKeyGUI()
     --  NÚT XÁC THỰC (gradient đẹp + hiệu ứng nhấn)
     -- ═══════════════════════════════════════════════
     local BtnFrame = Instance.new("Frame")
-    BtnFrame.Size = UDim2.new(1, -40, 0, 48)
-    BtnFrame.Position = UDim2.new(0, 20, 0, 186)
+    BtnFrame.Size = UDim2.new(1, -32, 0, 40)
+    BtnFrame.Position = UDim2.new(0, 16, 0, 150)
     BtnFrame.BackgroundColor3 = Color3.fromRGB(60, 20, 180)
     BtnFrame.BorderSizePixel = 0
     BtnFrame.ZIndex = 13
@@ -456,13 +456,13 @@ local function createKeyGUI()
     -- ═══════════════════════════════════════════════
     local ErrLabel = Instance.new("TextLabel")
     ErrLabel.Name = "ErrorLabel"
-    ErrLabel.Size = UDim2.new(1, -40, 0, 28)
-    ErrLabel.Position = UDim2.new(0, 20, 0, 248)
+    ErrLabel.Size = UDim2.new(1, -32, 0, 24)
+    ErrLabel.Position = UDim2.new(0, 16, 0, 200)
     ErrLabel.BackgroundColor3 = Color3.fromRGB(80, 10, 30)
     ErrLabel.BackgroundTransparency = 1
     ErrLabel.Text = ""
     ErrLabel.TextColor3 = Color3.fromRGB(255, 100, 130)
-    ErrLabel.TextSize = 12
+    ErrLabel.TextSize = 11
     ErrLabel.Font = Enum.Font.GothamBold
     ErrLabel.TextXAlignment = Enum.TextXAlignment.Center
     ErrLabel.ZIndex = 13
@@ -476,8 +476,8 @@ local function createKeyGUI()
     --  DIVIDER dưới với shimmer
     -- ═══════════════════════════════════════════════
     local Divider2 = Instance.new("Frame")
-    Divider2.Size = UDim2.new(1, -40, 0, 1)
-    Divider2.Position = UDim2.new(0, 20, 0, 290)
+    Divider2.Size = UDim2.new(1, -32, 0, 1)
+    Divider2.Position = UDim2.new(0, 16, 0, 234)
     Divider2.BackgroundColor3 = Color3.fromRGB(50, 30, 100)
     Divider2.BorderSizePixel = 0
     Divider2.ZIndex = 13
@@ -495,8 +495,8 @@ local function createKeyGUI()
     --  NÚT MUA KEY (nhỏ, outline style)
     -- ═══════════════════════════════════════════════
     local BuyKeyFrame = Instance.new("Frame")
-    BuyKeyFrame.Size = UDim2.new(1, -40, 0, 38)
-    BuyKeyFrame.Position = UDim2.new(0, 20, 0, 300)
+    BuyKeyFrame.Size = UDim2.new(1, -32, 0, 34)
+    BuyKeyFrame.Position = UDim2.new(0, 16, 0, 244)
     BuyKeyFrame.BackgroundColor3 = Color3.fromRGB(12, 8, 28)
     BuyKeyFrame.BorderSizePixel = 0
     BuyKeyFrame.ZIndex = 13
@@ -540,14 +540,14 @@ local function createKeyGUI()
         task.delay(0.15, function()
             TweenService:Create(BuyKeyFrame, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(12, 8, 28)}):Play()
         end)
-        -- Copy link Discord vào clipboard và hiển thị thông báo
-        local buyLink = "https://discord.gg/devgatinho"
+        -- Copy link server vào clipboard
+        local buyLink = "https://server-proxy-v2c0.onrender.com"
         pcall(function()
             if setclipboard then
                 setclipboard(buyLink)
-                showToast("📋 Đã copy link Discord! Paste vào browser để mua key.", Color3.fromRGB(140, 80, 20))
+                showToast("📋 Đã copy link shop! Paste vào browser để mua key.", Color3.fromRGB(140, 80, 20))
             else
-                showToast("🛒 Tham gia Discord: discord.gg/devgatinho để mua key!", Color3.fromRGB(140, 80, 20))
+                showToast("🛒 Link shop: server-proxy-v2c0.onrender.com", Color3.fromRGB(140, 80, 20))
             end
         end)
     end)
@@ -556,25 +556,25 @@ local function createKeyGUI()
     --  FOOTER + VERSION BADGE
     -- ═══════════════════════════════════════════════
     local Footer = Instance.new("TextLabel")
-    Footer.Size = UDim2.new(1, -40, 0, 22)
-    Footer.Position = UDim2.new(0, 20, 0, 348)
+    Footer.Size = UDim2.new(1, -32, 0, 18)
+    Footer.Position = UDim2.new(0, 16, 0, 288)
     Footer.BackgroundTransparency = 1
     Footer.Text = "👑 Dev Gatinho  •  ANIME MOD HUB v1.0"
     Footer.TextColor3 = Color3.fromRGB(80, 60, 140)
-    Footer.TextSize = 10
+    Footer.TextSize = 9
     Footer.Font = Enum.Font.Gotham
     Footer.TextXAlignment = Enum.TextXAlignment.Center
     Footer.ZIndex = 13
     Footer.Parent = Card
 
     local VerBadge = Instance.new("TextLabel")
-    VerBadge.Size = UDim2.new(0, 80, 0, 18)
-    VerBadge.Position = UDim2.new(0, 20, 0, 378)
+    VerBadge.Size = UDim2.new(0, 72, 0, 16)
+    VerBadge.Position = UDim2.new(0, 16, 0, 308)
     VerBadge.BackgroundColor3 = Color3.fromRGB(40, 20, 80)
     VerBadge.BackgroundTransparency = 0.3
     VerBadge.Text = "v1.0 • SEA3"
     VerBadge.TextColor3 = Color3.fromRGB(120, 100, 200)
-    VerBadge.TextSize = 9
+    VerBadge.TextSize = 8
     VerBadge.Font = Enum.Font.Code
     VerBadge.TextXAlignment = Enum.TextXAlignment.Center
     VerBadge.ZIndex = 13
@@ -893,25 +893,48 @@ local function startKeyGate(onSuccess)
                 if result.valid then
                     keyVerified = true
                     _currentVerifiedKey = key
-                    -- Xác định loại key từ server response
+                    -- Xác định loại key từ server response (fix: đọc đúng field)
                     local keyType = "NORMAL"
+                    local rawType = ""
                     if result.keyType then
-                        keyType = tostring(result.keyType):upper()
+                        rawType = tostring(result.keyType):upper()
                     elseif result.tier then
-                        keyType = tostring(result.tier):upper()
+                        rawType = tostring(result.tier):upper()
+                    elseif result.type then
+                        rawType = tostring(result.type):upper()
                     elseif result.premium or result.isPremium then
+                        rawType = "PREMIUM"
+                    end
+                    -- Normalize: PREMIUM / PRO / VIP → PREMIUM
+                    if rawType == "PREMIUM" or rawType == "PRO" or rawType == "VIP" or rawType:find("PREMIUM") or rawType:find("PRO") then
                         keyType = "PREMIUM"
+                    elseif rawType ~= "" then
+                        keyType = "NORMAL"
                     end
                     _currentKeyType = keyType
 
-                    -- Lấy expire time
+                    -- Lấy expire time (fix: thêm nhiều field names)
                     local expireTime = 0
                     if result.expireTime then
                         expireTime = tonumber(result.expireTime) or 0
+                    elseif result.expire_time then
+                        expireTime = tonumber(result.expire_time) or 0
+                    elseif result.expires_at then
+                        expireTime = tonumber(result.expires_at) or 0
                     elseif result.expire then
                         expireTime = tonumber(result.expire) or 0
+                    elseif result.expiry then
+                        expireTime = tonumber(result.expiry) or 0
+                    elseif result.expiration then
+                        expireTime = tonumber(result.expiration) or 0
                     elseif result.hsd then
                         expireTime = tonumber(result.hsd) or 0
+                    elseif result.expiresAt then
+                        expireTime = tonumber(result.expiresAt) or 0
+                    end
+                    -- Nếu là milliseconds (>1e12) thì chia 1000
+                    if expireTime > 1e12 then
+                        expireTime = math.floor(expireTime / 1000)
                     end
                     _currentExpireTime = expireTime
 
@@ -5019,14 +5042,18 @@ local function CreateAnimeModUILibrary()
             end
         end)
 
+        local _savedSize = UDim2.new(0, 560, 0, 380)
         function window:Minimize(state)
             self.Minimized = state and true or false
             tabList.Visible = not self.Minimized
             pages.Visible = not self.Minimized
             resizeHandle.Visible = not self.Minimized
             local curW = main.AbsoluteSize.X
+            if not self.Minimized then
+                _savedSize = UDim2.new(0, curW, 0, main.AbsoluteSize.Y)
+            end
             TweenService:Create(main, TweenInfo.new(0.25, Enum.EasingStyle.Quart), {
-                Size = self.Minimized and UDim2.new(0, curW, 0, 42) or UDim2.new(0, curW, 0, 380)
+                Size = self.Minimized and UDim2.new(0, curW, 0, 42) or _savedSize
             }):Play()
             minimizeButton.Text = self.Minimized and "+" or "—"
         end
@@ -5390,6 +5417,60 @@ end)
 if success and result then
     v466 = result
     ui_loaded = true
+    -- ═══ PREMIUM SPARKLE EFFECT ═══
+    -- Nếu key Premium: menu border lấp lánh anime màu vàng/hồng/tím
+    task.spawn(function()
+        task.wait(0.3)
+        if not (v466 and v466.Main) then return end
+        local mainGui = v466.Main
+        local stroke = mainGui:FindFirstChildOfClass("UIStroke")
+        if (_currentKeyType == "PREMIUM" or _currentKeyType == "VIP" or _currentKeyType == "PRO") then
+            -- Premium: viền lấp lánh vàng + hồng xen kẽ
+            local premiumColors = {
+                Color3.fromRGB(255, 200, 0),
+                Color3.fromRGB(255, 80, 200),
+                Color3.fromRGB(180, 80, 255),
+                Color3.fromRGB(0, 200, 255),
+                Color3.fromRGB(255, 200, 0),
+            }
+            if stroke then stroke.Thickness = 2.5 end
+            -- Spawn floating stars on menu
+            task.spawn(function()
+                local starEmojis = {"⭐","🌟","✨","💫","👑","💎","🔮"}
+                while mainGui and mainGui.Parent do
+                    task.wait(0.6 + math.random()*0.8)
+                    if not (mainGui and mainGui.Parent) then break end
+                    local star = Instance.new("TextLabel")
+                    star.BackgroundTransparency = 1
+                    star.Text = starEmojis[math.random(#starEmojis)]
+                    star.TextSize = math.random(10, 18)
+                    star.TextColor3 = premiumColors[math.random(#premiumColors)]
+                    star.Size = UDim2.new(0, 24, 0, 24)
+                    star.Position = UDim2.new(math.random(5, 90)/100, 0, math.random(10, 80)/100, 0)
+                    star.ZIndex = 20
+                    star.Parent = mainGui
+                    TweenService:Create(star, TweenInfo.new(1.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+                        Position = star.Position + UDim2.new(0, math.random(-30, 30), -0.15, 0),
+                        TextTransparency = 1,
+                    }):Play()
+                    task.delay(1.5, function()
+                        if star and star.Parent then star:Destroy() end
+                    end)
+                end
+            end)
+            -- Animate border colors
+            task.spawn(function()
+                local ci = 1
+                while mainGui and mainGui.Parent and stroke do
+                    ci = ci % #premiumColors + 1
+                    TweenService:Create(stroke, TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+                        Color = premiumColors[ci]
+                    }):Play()
+                    task.wait(1.0)
+                end
+            end)
+        end
+    end)
 else
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "⚠️ ANIME MOD HUB";
@@ -5569,28 +5650,36 @@ local hsdParagraph = v484:AddParagraph({
     Title = "📅  Hạn Sử Dụng Key (HSD)",
     Content = "Đang tải thông tin key..."
 })
--- Cập nhật HSD thực tế sau khi UI load
-task.delay(0.5, function()
-    local function buildHSDText()
-        local keyDisplay = _currentVerifiedKey ~= "" and ("Key: " .. string.sub(_currentVerifiedKey, 1, 8) .. "****") or "Key: Chưa đăng nhập"
-        local typeIcon = (_currentKeyType == "PREMIUM" or _currentKeyType == "VIP") and "👑 PREMIUM" or "🔰 THƯỜNG"
-        local hsdText
-        if _currentExpireTime > 0 then
-            local remaining = formatExpiry(_currentExpireTime)
-            local expireDate = os.date("*!%d/%m/%Y %H:%M", _currentExpireTime)
-            hsdText = "Còn lại: " .. remaining .. "\nHết hạn: " .. expireDate .. " (UTC)"
-        else
-            hsdText = "HSD: Kiểm tra trong server Discord của shop"
-        end
-        return keyDisplay .. "\nLoại key: " .. typeIcon .. "\n" .. hsdText .. "\n\n• Key hết hạn sẽ tự động đăng xuất\n• Mỗi key giới hạn 1 thiết bị"
+-- Cập nhật HSD thực tế NGAY LẬP TỨC sau khi UI load
+local function buildHSDText()
+    local keyDisplay = _currentVerifiedKey ~= "" and ("Key: " .. string.sub(_currentVerifiedKey, 1, 8) .. "****") or "Key: Chưa đăng nhập"
+    local typeIcon
+    if _currentKeyType == "PREMIUM" or _currentKeyType == "VIP" or _currentKeyType == "PRO" then
+        typeIcon = "👑 PREMIUM"
+    else
+        typeIcon = "🔰 THƯỜNG"
     end
-    pcall(function() hsdParagraph:Set(buildHSDText()) end)
-    -- Cập nhật HSD mỗi 60 giây (đếm ngược)
-    task.spawn(function()
-        while task.wait(60) do
-            pcall(function() hsdParagraph:Set(buildHSDText()) end)
+    local hsdText
+    if _currentExpireTime and _currentExpireTime > 0 then
+        local remaining = formatExpiry(_currentExpireTime)
+        local expireDate = os.date("*!%d/%m/%Y %H:%M", _currentExpireTime)
+        if remaining == "ĐÃ HẾT HẠN" then
+            hsdText = "⛔ KEY ĐÃ HẾT HẠN"
+        else
+            hsdText = "HSD: Còn lại " .. remaining .. "\nHết hạn: " .. expireDate .. " (UTC)"
         end
-    end)
+    else
+        hsdText = "HSD: Kiểm tra trong server Discord của shop"
+    end
+    return keyDisplay .. "\nLoại key: " .. typeIcon .. "\n" .. hsdText .. "\n\n• Key hết hạn sẽ tự động đăng xuất\n• Mỗi key giới hạn 1 thiết bị"
+end
+-- Cập nhật ngay lập tức
+pcall(function() hsdParagraph:Set(buildHSDText()) end)
+-- Cập nhật HSD mỗi 30 giây (đếm ngược realtime)
+task.spawn(function()
+    while task.wait(30) do
+        pcall(function() hsdParagraph:Set(buildHSDText()) end)
+    end
 end)
 
 v484:AddParagraph({
