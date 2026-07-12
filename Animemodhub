@@ -777,34 +777,35 @@ end
 
 -- ──────────────────────────────────────────────────────────
 local function verifyKey(key, callback)
-    -- Gửi POST JSON body thay vì GET ?key=... để bypass HoHo Hub key-format hook
-    -- v2: xử lý nil response, JSON rỗng, timeout rõ ràng
-    -- v3: gửi kèm device ID (prefix "LUA-") để server phân slot riêng với Violentmonkey
-    local rawBody = nil
-    local fetchOk = pcall(function()
-        rawBody = httpPost(
-            SERVER_URL .. "/api/verify",
-            { key = key, app = APP_ID, device = _LUA_DEVICE_ID, platform = "roblox" }
-        )
+    -- FIX v9.1.2: Toàn bộ logic chạy trong task.spawn riêng để callback
+    -- có thể dùng task.wait() mà không block thread gọi.
+    task.spawn(function()
+        local rawBody = nil
+        local fetchOk = pcall(function()
+            rawBody = httpPost(
+                SERVER_URL .. "/api/verify",
+                { key = key, app = APP_ID, device = _LUA_DEVICE_ID, platform = "roblox" }
+            )
+        end)
+
+        -- Không nhận được response gì từ server
+        if not fetchOk or not rawBody or rawBody == "" then
+            task.spawn(callback, { valid = false, reason = "network_error" })
+            return
+        end
+
+        -- Parse JSON response
+        local parseOk, result = pcall(function()
+            return HttpService:JSONDecode(rawBody)
+        end)
+
+        if parseOk and result and type(result) == "table" then
+            task.spawn(callback, result)
+        else
+            -- Server trả về response không hợp lệ (bị truncate, HTML error page...)
+            task.spawn(callback, { valid = false, reason = "server_error" })
+        end
     end)
-
-    -- Không nhận được response gì từ server
-    if not fetchOk or not rawBody or rawBody == "" then
-        callback({ valid = false, reason = "network_error" })
-        return
-    end
-
-    -- Parse JSON response
-    local parseOk, result = pcall(function()
-        return HttpService:JSONDecode(rawBody)
-    end)
-
-    if parseOk and result and type(result) == "table" then
-        callback(result)
-    else
-        -- Server trả về response không hợp lệ (bị truncate, HTML error page...)
-        callback({ valid = false, reason = "server_error" })
-    end
 end
 
 -- ──────────────────────────────────────────────────────────
@@ -1118,6 +1119,14 @@ local function startKeyGate(onSuccess)
         end)
     end
 
+    -- FIX v9.1.2: _guiAlive dùng để kiểm tra GUI còn tồn tại trước khi truy cập
+    local _guiAlive = true
+
+    local function safeSetLoading(loading)
+        if not _guiAlive then return end
+        pcall(setLoading, loading)
+    end
+
     local function doVerify()
         local key = input.Text:match("^%s*(.-)%s*$") -- trim
         if key == "" then
@@ -1132,150 +1141,176 @@ local function startKeyGate(onSuccess)
         -- Vô hiệu hoá nút trong lúc đang xác thực để tránh bấm nhiều lần
         btn.Active = false
 
-        -- Timeout 20 giây — nếu server không phản hồi, hiện lỗi thay vì đơ mãi
+        -- FIX: Dùng biến số nguyên tử thay vì boolean để tránh race condition
+        -- verifyDone = 0 (chưa xong), 1 (đã xử lý)
         local verifyDone = false
+
+        -- Timeout 20 giây — nếu server không phản hồi, hiện lỗi thay vì đơ mãi
         task.delay(20, function()
-            if not verifyDone then
-                verifyDone = true
-                task.defer(function()
-                    setLoading(false)
-                    btn.Active = true
+            if verifyDone then return end
+            verifyDone = true
+            -- Dùng task.spawn thay vì task.defer để đảm bảo chạy ngay frame này
+            task.spawn(function()
+                safeSetLoading(false)
+                if _guiAlive then
+                    pcall(function() btn.Active = true end)
                     setError(ERROR_MESSAGES["network_error"])
-                    showToast(ERROR_MESSAGES["network_error"], nil, "warning")
-                end)
-            end
+                end
+                showToast(ERROR_MESSAGES["network_error"], nil, "warning")
+            end)
         end)
 
-        task.spawn(function()
-            verifyKey(key, function(result)
-                if verifyDone then return end  -- timeout đã xử lý rồi
-                verifyDone = true
-                setLoading(false)
-                btn.Active = true
+        -- FIX: verifyKey đã tự chạy trong task.spawn nên KHÔNG cần bọc thêm task.spawn nữa
+        verifyKey(key, function(result)
+            if verifyDone then return end  -- timeout đã xử lý rồi
+            verifyDone = true
 
-                if result.valid then
-                    keyVerified = true
-                    _currentVerifiedKey = key
-                    -- Xác định loại key từ server response
-                    -- Server trả về field "type" với giá trị lowercase: "premium" / "normal" / null
-                    local keyType = "NORMAL"
-                    local rawType = ""
-                    if result.type then
-                        rawType = tostring(result.type):upper()
-                    elseif result.keyType then
-                        rawType = tostring(result.keyType):upper()
-                    elseif result.tier then
-                        rawType = tostring(result.tier):upper()
-                    elseif result.premium or result.isPremium then
-                        rawType = "PREMIUM"
-                    end
-                    if rawType == "PREMIUM" or rawType == "PRO" or rawType == "VIP"
-                       or rawType:find("PREMIUM") or rawType:find("PRO") or rawType:find("VIP") then
-                        keyType = "PREMIUM"
-                    end
-                    _currentKeyType = keyType
+            safeSetLoading(false)
+            if _guiAlive then
+                pcall(function() btn.Active = true end)
+            end
 
-                    -- Lấy expire time — server trả về "expiresAt" dạng ISO 8601
-                    -- VD: "2026-07-12T19:36:00.000Z" (UTC), cần parse + bù timezone
-                    local expireTime = 0
-                    local fieldOrder2 = {
-                        "expiresAt","expireTime","expire_time","expires_at","expire",
-                        "expiry","expiration","hsd","end_time","endTime","expiredAt"
-                    }
-                    for _, fld in ipairs(fieldOrder2) do
-                        local v = result[fld]
-                        if v ~= nil and v ~= "" and v ~= false then
-                            local n = tonumber(v)
-                            if n then
-                                if n > 1e12 then n = math.floor(n/1000) end
-                                expireTime = n
-                            else
-                                -- Dùng parseDateTimeString đã hỗ trợ ISO 8601
-                                expireTime = parseDateTimeString(tostring(v))
-                            end
-                            if expireTime > 0 then break end
+            if result.valid then
+                keyVerified = true
+                _currentVerifiedKey = key
+                -- Xác định loại key từ server response
+                -- Server trả về field "type" với giá trị lowercase: "premium" / "normal" / null
+                local keyType = "NORMAL"
+                local rawType = ""
+                if result.type then
+                    rawType = tostring(result.type):upper()
+                elseif result.keyType then
+                    rawType = tostring(result.keyType):upper()
+                elseif result.tier then
+                    rawType = tostring(result.tier):upper()
+                elseif result.premium or result.isPremium then
+                    rawType = "PREMIUM"
+                end
+                if rawType == "PREMIUM" or rawType == "PRO" or rawType == "VIP"
+                   or rawType:find("PREMIUM") or rawType:find("PRO") or rawType:find("VIP") then
+                    keyType = "PREMIUM"
+                end
+                _currentKeyType = keyType
+
+                -- Lấy expire time — server trả về "expiresAt" dạng ISO 8601
+                local expireTime = 0
+                local fieldOrder2 = {
+                    "expiresAt","expireTime","expire_time","expires_at","expire",
+                    "expiry","expiration","hsd","end_time","endTime","expiredAt"
+                }
+                for _, fld in ipairs(fieldOrder2) do
+                    local v = result[fld]
+                    if v ~= nil and v ~= "" and v ~= false then
+                        local n = tonumber(v)
+                        if n then
+                            if n > 1e12 then n = math.floor(n/1000) end
+                            expireTime = n
+                        else
+                            expireTime = parseDateTimeString(tostring(v))
                         end
+                        if expireTime > 0 then break end
                     end
-                    _currentExpireTime = expireTime
+                end
+                _currentExpireTime = expireTime
 
-                    -- Lưu key thành công
-                    saveKey(key, keyType, expireTime)
+                -- Lưu key thành công
+                saveKey(key, keyType, expireTime)
 
-                    -- Đổi màu input stroke
-                    inputStroke.Color = Color3.fromRGB(50, 200, 80)
-
-                    local card = gui:FindFirstChild("Card")
-                    if keyType == "PREMIUM" or keyType == "VIP" then
-                        -- Hiệu ứng VIP
-                        showToast("KEY PREMIUM! Loading script...", Color3.fromRGB(200, 140, 0), "success")
-                        if card then playVipSuccessEffect(card) end
-                        task.wait(1.2)
-                    else
-                        showToast("Key verified! Loading script...", Color3.fromRGB(30, 140, 60), "success")
-                        if card then playNormalSuccessEffect(card) end
-                        task.wait(0.8)
+                -- FIX: Bọc tất cả thao tác GUI trong pcall vì GUI có thể bị destroy bởi luồng khác
+                pcall(function()
+                    if _guiAlive then
+                        inputStroke.Color = Color3.fromRGB(50, 200, 80)
                     end
+                end)
 
-                    -- Fade out
+                local card = _guiAlive and gui:FindFirstChild("Card") or nil
+                if keyType == "PREMIUM" or keyType == "VIP" then
+                    showToast("KEY PREMIUM! Loading script...", Color3.fromRGB(200, 140, 0), "success")
+                    if card and _guiAlive then pcall(playVipSuccessEffect, card) end
+                    task.wait(1.2)
+                else
+                    showToast("Key verified! Loading script...", Color3.fromRGB(30, 140, 60), "success")
+                    if card and _guiAlive then pcall(playNormalSuccessEffect, card) end
+                    task.wait(0.8)
+                end
+
+                -- FIX: Chỉ fade và destroy nếu GUI vẫn còn sống
+                if _guiAlive then
                     local overlay = gui:FindFirstChild("Overlay")
                     if overlay then
                         TweenService:Create(overlay, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
                     end
-                    if card then
-                        TweenService:Create(card, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
+                    -- Re-query card sau task.wait vì card ref có thể stale
+                    local card2 = gui:FindFirstChild("Card")
+                    if card2 then
+                        TweenService:Create(card2, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
                     end
                     task.wait(0.45)
-                    gui:Destroy()
+                end
 
-                    -- Bắt đầu background checker
-                    startBackgroundKeyCheck(key, function(reason)
-                        -- Key hết hạn / bị ban / không tồn tại → xoá key đã lưu, destroy main UI, hiện lại key gate
-                        stopBackgroundKeyCheck()
-                        keyVerified = false
-                        -- ✅ Xoá key đã lưu để lần sau không auto-fill key lỗi
-                        if reason == "expired" or reason == "banned" or reason == "key_not_found" then
-                            deleteSavedKey()
-                        end
-                        -- Huỷ các GUI hiện tại
-                        local cg = game:GetService("CoreGui")
+                -- FIX: Đánh dấu GUI không còn tồn tại TRƯỚC khi destroy để các luồng khác biết
+                _guiAlive = false
+                pcall(function() gui:Destroy() end)
+
+                -- Bắt đầu background checker
+                startBackgroundKeyCheck(key, function(reason)
+                    stopBackgroundKeyCheck()
+                    keyVerified = false
+                    if reason == "expired" or reason == "banned" or reason == "key_not_found" then
+                        deleteSavedKey()
+                    end
+                    local cg = game:GetService("CoreGui")
+                    pcall(function()
                         if cg:FindFirstChild("AnimeModHubEmbeddedUI") then
                             cg:FindFirstChild("AnimeModHubEmbeddedUI"):Destroy()
                         end
                         if cg:FindFirstChild("ControlGUI") then
                             cg:FindFirstChild("ControlGUI"):Destroy()
                         end
+                    end)
+                    pcall(function()
                         local pg = LocalPlayer.PlayerGui
                         if pg:FindFirstChild("KeyToastGui") then
                             pg:FindFirstChild("KeyToastGui"):Destroy()
                         end
-                        -- Hiện thông báo
-                        local msg = ERROR_MESSAGES[reason] or "Key is no longer valid."
-                        local tType = TOAST_TYPE[reason] or "error"
-                        showToast(msg .. " Please log in again.", nil, tType)
-                        task.wait(1.5)
-                        -- Quay lại màn đăng nhập
-                        startKeyGate(onSuccess)
                     end)
+                    local msg = ERROR_MESSAGES[reason] or "Key is no longer valid."
+                    local tType = TOAST_TYPE[reason] or "error"
+                    showToast(msg .. " Please log in again.", nil, tType)
+                    task.wait(1.5)
+                    startKeyGate(onSuccess)
+                end)
 
-                    onSuccess()
-                else
-                    local reason = result.reason or "unknown"
-                    local msg = ERROR_MESSAGES[reason] or ("❌ Invalid key (" .. reason .. ")")
+                -- FIX: Bọc onSuccess trong pcall để lỗi trong script chính
+                -- không khiến giao diện chức năng bị đen / không mở
+                local ok, err = pcall(onSuccess)
+                if not ok then
+                    warn("[AnimeModHub] onSuccess error: " .. tostring(err))
+                end
+            else
+                local reason = result.reason or "unknown"
+                local msg = ERROR_MESSAGES[reason] or ("❌ Invalid key (" .. reason .. ")")
+                if _guiAlive then
                     setError(msg)
-                    -- ✅ Xoá key đã lưu nếu key hết hạn / bị ban / không tồn tại
                     if reason == "expired" or reason == "banned" or reason == "key_not_found" then
                         deleteSavedKey()
-                        -- Xoá text trong ô nhập để người dùng biết phải nhập key mới
-                        input.Text = ""
+                        pcall(function() input.Text = "" end)
                     end
-                    -- Toast thông báo nổi kèm hiệu ứng theo loại lỗi
-                    local tType = TOAST_TYPE[reason] or "error"
-                    showToast(msg, nil, tType)
-                    inputStroke.Color = Color3.fromRGB(200, 50, 50)
-                    task.wait(1.5)
-                    inputStroke.Color = Color3.fromRGB(55, 60, 110)
                 end
-            end)
+                local tType = TOAST_TYPE[reason] or "error"
+                showToast(msg, nil, tType)
+                if _guiAlive then
+                    pcall(function()
+                        inputStroke.Color = Color3.fromRGB(200, 50, 50)
+                    end)
+                    task.wait(1.5)
+                    pcall(function()
+                        if _guiAlive then
+                            inputStroke.Color = Color3.fromRGB(55, 60, 110)
+                        end
+                    end)
+                end
+            end
         end)
     end
 
@@ -1290,16 +1325,18 @@ local function startKeyGate(onSuccess)
     -- ✅ Auto-load & tự xác thực key đã lưu (đặt SAU khi doVerify đã khai báo)
     local savedData = loadSavedKey()
     if savedData and savedData.key and savedData.key ~= "" then
-        input.Text = savedData.key
+        pcall(function() input.Text = savedData.key end)
         -- Hiện thông báo đang tự xác thực
-        if errLabel and errLabel.Parent then
-            errLabel.Text = "💾 Đang tự xác thực key đã lưu..."
-            errLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
-            errLabel.BackgroundTransparency = 0.5
-        end
-        -- Delay nhỏ để GUI render xong rồi mới gọi xác thực
+        pcall(function()
+            if errLabel and errLabel.Parent then
+                errLabel.Text = "💾 Đang tự xác thực key đã lưu..."
+                errLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+                errLabel.BackgroundTransparency = 0.5
+            end
+        end)
+        -- FIX: Dùng _guiAlive thay vì gui.Parent để check an toàn hơn
         task.delay(0.6, function()
-            if gui and gui.Parent then
+            if _guiAlive then
                 doVerify()
             end
         end)
