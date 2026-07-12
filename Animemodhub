@@ -628,6 +628,19 @@ local function saveKey(key, keyType, expireTime)
     _savedKeyData.expireTime = expireTime or 0
 end
 
+-- Xoá key đã lưu khi key hết hạn / bị ban / không tồn tại
+local function deleteSavedKey()
+    pcall(function()
+        if delfile and isfile and isfile(SAVE_FILE) then
+            delfile(SAVE_FILE)
+        elseif writefile then
+            -- Fallback: ghi file rỗng nếu executor không có delfile
+            writefile(SAVE_FILE, HttpService:JSONEncode({ key = "", keyType = "NORMAL", expireTime = 0 }))
+        end
+    end)
+    _savedKeyData = { key = "", keyType = "NORMAL", expireTime = 0 }
+end
+
 -- ──────────────────────────────────────────────────────────
 --  Background key checker (kiểm tra key ngầm mỗi 60s)
 -- ──────────────────────────────────────────────────────────
@@ -1030,32 +1043,6 @@ local _currentExpireTime = 0
 local function startKeyGate(onSuccess)
     local gui, btn, input, errLabel, btnLabel, inputStroke = createKeyGUI()
 
-    -- Auto-fill key đã lưu
-    local savedData = loadSavedKey()
-    if savedData and savedData.key and savedData.key ~= "" then
-        input.Text = savedData.key
-        -- Khôi phục thông tin đã lưu
-        if savedData.keyType then _currentKeyType = savedData.keyType end
-        if savedData.expireTime and savedData.expireTime > 0 then
-            _currentExpireTime = savedData.expireTime
-        end
-        -- Hiện gợi ý
-        task.delay(0.3, function()
-            if errLabel and errLabel.Parent then
-                errLabel.Text = "💾 Saved key auto-filled"
-                errLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
-                errLabel.BackgroundTransparency = 0.5
-                task.delay(2, function()
-                    if errLabel and errLabel.Parent then
-                        errLabel.Text = ""
-                        errLabel.BackgroundTransparency = 1
-                        errLabel.TextColor3 = Color3.fromRGB(255, 100, 130)
-                    end
-                end)
-            end
-        end)
-    end
-
     local function setError(msg)
         errLabel.TextColor3 = Color3.fromRGB(255, 100, 130)
         errLabel.Text = msg
@@ -1190,48 +1177,25 @@ local function startKeyGate(onSuccess)
 
                     -- Lấy expire time — server trả về "expiresAt" dạng ISO 8601
                     -- VD: "2026-07-12T19:36:00.000Z" (UTC), cần parse + bù timezone
-                    -- FIX: inline parser thay vì parseDateTimeString (định nghĩa sau dòng 6000
-                    --      nên tại đây chưa tồn tại → crash im lặng → menu không mở)
                     local expireTime = 0
-                    local function _parseExpiryInline(s)
-                        if not s then return 0 end
-                        s = tostring(s)
-                        local y,mo,d,h,m,sec = s:match("(%d%d%d%d)-(%d%d)-(%d%d)T(%d%d):(%d%d):(%d%d)")
-                        if y then
-                            local ok2, t = pcall(os.time, {year=tonumber(y),month=tonumber(mo),day=tonumber(d),
-                                                           hour=tonumber(h),min=tonumber(m),sec=tonumber(sec or 0)})
-                            if ok2 and t then
-                                local utcNow = os.time(os.date("!*t"))
-                                return t + (os.time() - utcNow)
-                            end
-                        end
-                        local h2,m2,d2,mo2,y2 = s:match("(%d+):(%d+)%s+(%d+)/(%d+)/(%d+)")
-                        if h2 then local ok2,t=pcall(os.time,{year=tonumber(y2),month=tonumber(mo2),day=tonumber(d2),hour=tonumber(h2),min=tonumber(m2),sec=0}) if ok2 and t then return t end end
-                        local d3,mo3,y3,h3,m3 = s:match("(%d+)/(%d+)/(%d+)%s+(%d+):(%d+)")
-                        if d3 then local ok2,t=pcall(os.time,{year=tonumber(y3),month=tonumber(mo3),day=tonumber(d3),hour=tonumber(h3),min=tonumber(m3),sec=0}) if ok2 and t then return t end end
-                        local n = tonumber(s)
-                        if n then if n > 1e12 then n = math.floor(n/1000) end return n end
-                        return 0
-                    end
                     local fieldOrder2 = {
                         "expiresAt","expireTime","expire_time","expires_at","expire",
                         "expiry","expiration","hsd","end_time","endTime","expiredAt"
                     }
-                    pcall(function()
-                        for _, fld in ipairs(fieldOrder2) do
-                            local v = result[fld]
-                            if v ~= nil and v ~= "" and v ~= false then
-                                local n = tonumber(v)
-                                if n then
-                                    if n > 1e12 then n = math.floor(n/1000) end
-                                    expireTime = n
-                                else
-                                    expireTime = _parseExpiryInline(tostring(v))
-                                end
-                                if expireTime > 0 then break end
+                    for _, fld in ipairs(fieldOrder2) do
+                        local v = result[fld]
+                        if v ~= nil and v ~= "" and v ~= false then
+                            local n = tonumber(v)
+                            if n then
+                                if n > 1e12 then n = math.floor(n/1000) end
+                                expireTime = n
+                            else
+                                -- Dùng parseDateTimeString đã hỗ trợ ISO 8601
+                                expireTime = parseDateTimeString(tostring(v))
                             end
+                            if expireTime > 0 then break end
                         end
-                    end)
+                    end
                     _currentExpireTime = expireTime
 
                     -- Lưu key thành công
@@ -1265,9 +1229,13 @@ local function startKeyGate(onSuccess)
 
                     -- Bắt đầu background checker
                     startBackgroundKeyCheck(key, function(reason)
-                        -- Key hết hạn / bị ban → destroy main UI, hiện lại key gate
+                        -- Key hết hạn / bị ban / không tồn tại → xoá key đã lưu, destroy main UI, hiện lại key gate
                         stopBackgroundKeyCheck()
                         keyVerified = false
+                        -- ✅ Xoá key đã lưu để lần sau không auto-fill key lỗi
+                        if reason == "expired" or reason == "banned" or reason == "key_not_found" then
+                            deleteSavedKey()
+                        end
                         -- Huỷ các GUI hiện tại
                         local cg = game:GetService("CoreGui")
                         if cg:FindFirstChild("AnimeModHubEmbeddedUI") then
@@ -1294,6 +1262,12 @@ local function startKeyGate(onSuccess)
                     local reason = result.reason or "unknown"
                     local msg = ERROR_MESSAGES[reason] or ("❌ Invalid key (" .. reason .. ")")
                     setError(msg)
+                    -- ✅ Xoá key đã lưu nếu key hết hạn / bị ban / không tồn tại
+                    if reason == "expired" or reason == "banned" or reason == "key_not_found" then
+                        deleteSavedKey()
+                        -- Xoá text trong ô nhập để người dùng biết phải nhập key mới
+                        input.Text = ""
+                    end
                     -- Toast thông báo nổi kèm hiệu ứng theo loại lỗi
                     local tType = TOAST_TYPE[reason] or "error"
                     showToast(msg, nil, tType)
@@ -1312,6 +1286,24 @@ local function startKeyGate(onSuccess)
     input.FocusLost:Connect(function(enterPressed)
         if enterPressed then doVerify() end
     end)
+
+    -- ✅ Auto-load & tự xác thực key đã lưu (đặt SAU khi doVerify đã khai báo)
+    local savedData = loadSavedKey()
+    if savedData and savedData.key and savedData.key ~= "" then
+        input.Text = savedData.key
+        -- Hiện thông báo đang tự xác thực
+        if errLabel and errLabel.Parent then
+            errLabel.Text = "💾 Đang tự xác thực key đã lưu..."
+            errLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+            errLabel.BackgroundTransparency = 0.5
+        end
+        -- Delay nhỏ để GUI render xong rồi mới gọi xác thực
+        task.delay(0.6, function()
+            if gui and gui.Parent then
+                doVerify()
+            end
+        end)
+    end
 end
 
 -- ══════════════════════════════════════════════════════════
