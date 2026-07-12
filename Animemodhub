@@ -34,8 +34,8 @@ local function createKeyGUI()
     local Overlay = Instance.new("Frame")
     Overlay.Name = "Overlay"
     Overlay.Size = UDim2.fromScale(1, 1)
-    Overlay.BackgroundColor3 = Color3.fromRGB(4, 4, 14)
-    Overlay.BackgroundTransparency = 0.18
+    Overlay.BackgroundColor3 = Color3.fromRGB(2, 2, 10)
+    Overlay.BackgroundTransparency = 0.12
     Overlay.BorderSizePixel = 0
     Overlay.ZIndex = 10
     Overlay.Parent = ScreenGui
@@ -87,7 +87,7 @@ local function createKeyGUI()
     -- Outer glow frame
     local GlowFrame = Instance.new("Frame")
     GlowFrame.Name = "GlowFrame"
-    GlowFrame.Size = UDim2.new(0, 392, 0, 368)
+    GlowFrame.Size = UDim2.new(0, 392, 0, 420)
     GlowFrame.AnchorPoint = Vector2.new(0.5, 0.5)
     GlowFrame.Position = UDim2.fromScale(0.5, 0.5)
     GlowFrame.BackgroundColor3 = Color3.fromRGB(120, 40, 255)
@@ -119,7 +119,7 @@ local function createKeyGUI()
 
     local Card = Instance.new("Frame")
     Card.Name = "Card"
-    Card.Size = UDim2.new(0, 380, 0, 356)
+    Card.Size = UDim2.new(0, 380, 0, 408)
     Card.AnchorPoint = Vector2.new(0.5, 0.5)
     Card.Position = UDim2.fromScale(0.5, 0.5)
     Card.BackgroundColor3 = Color3.fromRGB(10, 10, 22)
@@ -158,14 +158,14 @@ local function createKeyGUI()
     -- Scale in animation
     Card.Size = UDim2.new(0, 200, 0, 200)
     TweenService:Create(Card, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, 380, 0, 356)
+        Size = UDim2.new(0, 380, 0, 408)
     }):Play()
 
     -- ═══════════════════════════════════════════════
-    --  TOP BANNER (gradient xanh tím)
+    --  TOP BANNER (gradient xanh tím - anime style)
     -- ═══════════════════════════════════════════════
     local TopBanner = Instance.new("Frame")
-    TopBanner.Size = UDim2.new(1, 0, 0, 72)
+    TopBanner.Size = UDim2.new(1, 0, 0, 78)
     TopBanner.BackgroundColor3 = Color3.fromRGB(60, 0, 180)
     TopBanner.BorderSizePixel = 0
     TopBanner.ZIndex = 13
@@ -178,7 +178,7 @@ local function createKeyGUI()
     local TopGrad = Instance.new("UIGradient")
     TopGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 0, 255)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 160, 255)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 140, 255)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 0, 200)),
     })
     TopGrad.Rotation = 90
@@ -188,55 +188,114 @@ local function createKeyGUI()
     task.spawn(function()
         local rot = 0
         while TopBanner and TopBanner.Parent do
-            rot = (rot + 1) % 360
+            rot = (rot + 0.5) % 360
             TopGrad.Rotation = rot
             task.wait(0.05)
         end
     end)
 
-    -- Icon anime (katana / ninja emoji)
-    local IconLabel = Instance.new("TextLabel")
-    IconLabel.Size = UDim2.new(0, 50, 0, 50)
-    IconLabel.Position = UDim2.new(0, 14, 0, 11)
-    IconLabel.BackgroundTransparency = 1
-    IconLabel.Text = "⚔️"
-    IconLabel.TextSize = 32
-    IconLabel.ZIndex = 14
-    IconLabel.Parent = TopBanner
+    -- ── Avatar anime tròn (giống image 4 - vòng vàng) ──
+    local AvatarRing = Instance.new("Frame")
+    AvatarRing.Size = UDim2.new(0, 58, 0, 58)
+    AvatarRing.Position = UDim2.new(0, 10, 0, 10)
+    AvatarRing.BackgroundColor3 = Color3.fromRGB(255, 200, 30)
+    AvatarRing.BorderSizePixel = 0
+    AvatarRing.ZIndex = 14
+    AvatarRing.Parent = TopBanner
+    local AvatarRingCorner = Instance.new("UICorner")
+    AvatarRingCorner.CornerRadius = UDim.new(1, 0)
+    AvatarRingCorner.Parent = AvatarRing
+    -- Animate gold ring glow
+    task.spawn(function()
+        local ringColors = {
+            Color3.fromRGB(255, 200, 30),
+            Color3.fromRGB(255, 150, 0),
+            Color3.fromRGB(255, 230, 100),
+            Color3.fromRGB(255, 200, 30),
+        }
+        local ri = 1
+        while AvatarRing and AvatarRing.Parent do
+            ri = ri % #ringColors + 1
+            TweenService:Create(AvatarRing, TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+                BackgroundColor3 = ringColors[ri]
+            }):Play()
+            task.wait(1.2)
+        end
+    end)
+
+    local AvatarImg = Instance.new("ImageLabel")
+    AvatarImg.Size = UDim2.new(0, 52, 0, 52)
+    AvatarImg.Position = UDim2.new(0, 3, 0, 3)
+    AvatarImg.BackgroundColor3 = Color3.fromRGB(20, 10, 40)
+    AvatarImg.Image = "rbxassetid://116828114235759"
+    AvatarImg.ScaleType = Enum.ScaleType.Crop
+    AvatarImg.BorderSizePixel = 0
+    AvatarImg.ZIndex = 15
+    AvatarImg.Parent = AvatarRing
+    local AvatarCorner = Instance.new("UICorner")
+    AvatarCorner.CornerRadius = UDim.new(1, 0)
+    AvatarCorner.Parent = AvatarImg
+
+    -- Lightning icons trái phải title
+    local IconLeft = Instance.new("TextLabel")
+    IconLeft.Size = UDim2.new(0, 22, 0, 24)
+    IconLeft.Position = UDim2.new(0, 74, 0, 8)
+    IconLeft.BackgroundTransparency = 1
+    IconLeft.Text = "⚡"
+    IconLeft.TextSize = 16
+    IconLeft.ZIndex = 14
+    IconLeft.Parent = TopBanner
 
     -- Title
     local Title = Instance.new("TextLabel")
-    Title.Size = UDim2.new(1, -70, 0, 30)
-    Title.Position = UDim2.new(0, 56, 0, 8)
+    Title.Size = UDim2.new(1, -100, 0, 28)
+    Title.Position = UDim2.new(0, 94, 0, 6)
     Title.BackgroundTransparency = 1
-    Title.Text = "ANIME MOD HUB"
+    Title.Text = "ANIME MOD HUB v1.0"
     Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Title.TextSize = 20
+    Title.TextSize = 18
     Title.Font = Enum.Font.GothamBold
     Title.TextXAlignment = Enum.TextXAlignment.Left
-    Title.TextStrokeColor3 = Color3.fromRGB(180, 100, 255)
+    Title.TextStrokeColor3 = Color3.fromRGB(200, 120, 255)
     Title.TextStrokeTransparency = 0.3
     Title.ZIndex = 14
     Title.Parent = TopBanner
 
     local SubTitle = Instance.new("TextLabel")
-    SubTitle.Size = UDim2.new(1, -70, 0, 20)
-    SubTitle.Position = UDim2.new(0, 56, 0, 40)
+    SubTitle.Size = UDim2.new(1, -100, 0, 18)
+    SubTitle.Position = UDim2.new(0, 94, 0, 36)
     SubTitle.BackgroundTransparency = 1
-    SubTitle.Text = "✦ Nhập key để kích hoạt script ✦"
-    SubTitle.TextColor3 = Color3.fromRGB(200, 200, 255)
+    SubTitle.Text = "【By 👑Dev Gatinho👑】"
+    SubTitle.TextColor3 = Color3.fromRGB(200, 190, 255)
     SubTitle.TextSize = 11
     SubTitle.Font = Enum.Font.Gotham
     SubTitle.TextXAlignment = Enum.TextXAlignment.Left
     SubTitle.ZIndex = 14
     SubTitle.Parent = TopBanner
 
+    -- Tag nhỏ góc phải
+    local TagLabel = Instance.new("TextLabel")
+    TagLabel.Size = UDim2.new(0, 70, 0, 18)
+    TagLabel.Position = UDim2.new(1, -78, 0, 8)
+    TagLabel.BackgroundColor3 = Color3.fromRGB(30, 10, 70)
+    TagLabel.BackgroundTransparency = 0.2
+    TagLabel.Text = "KEY GATE"
+    TagLabel.TextColor3 = Color3.fromRGB(200, 160, 255)
+    TagLabel.TextSize = 9
+    TagLabel.Font = Enum.Font.GothamBold
+    TagLabel.TextXAlignment = Enum.TextXAlignment.Center
+    TagLabel.ZIndex = 14
+    TagLabel.Parent = TopBanner
+    local TagCorner = Instance.new("UICorner")
+    TagCorner.CornerRadius = UDim.new(0, 6)
+    TagCorner.Parent = TagLabel
+
     -- ═══════════════════════════════════════════════
     --  DIVIDER LINE với hiệu ứng shimmer
     -- ═══════════════════════════════════════════════
     local Divider = Instance.new("Frame")
     Divider.Size = UDim2.new(1, -40, 0, 2)
-    Divider.Position = UDim2.new(0, 20, 0, 80)
+    Divider.Position = UDim2.new(0, 20, 0, 86)
     Divider.BackgroundColor3 = Color3.fromRGB(100, 60, 220)
     Divider.BorderSizePixel = 0
     Divider.ZIndex = 13
@@ -265,7 +324,7 @@ local function createKeyGUI()
     -- ═══════════════════════════════════════════════
     local KeyLabel = Instance.new("TextLabel")
     KeyLabel.Size = UDim2.new(1, -40, 0, 22)
-    KeyLabel.Position = UDim2.new(0, 20, 0, 92)
+    KeyLabel.Position = UDim2.new(0, 20, 0, 98)
     KeyLabel.BackgroundTransparency = 1
     KeyLabel.Text = "🔑  KEY XÁC THỰC"
     KeyLabel.TextColor3 = Color3.fromRGB(160, 120, 255)
@@ -280,7 +339,7 @@ local function createKeyGUI()
     -- ═══════════════════════════════════════════════
     local InputBG = Instance.new("Frame")
     InputBG.Size = UDim2.new(1, -40, 0, 48)
-    InputBG.Position = UDim2.new(0, 20, 0, 118)
+    InputBG.Position = UDim2.new(0, 20, 0, 124)
     InputBG.BackgroundColor3 = Color3.fromRGB(16, 12, 36)
     InputBG.BorderSizePixel = 0
     InputBG.ZIndex = 13
@@ -340,7 +399,7 @@ local function createKeyGUI()
     -- ═══════════════════════════════════════════════
     local BtnFrame = Instance.new("Frame")
     BtnFrame.Size = UDim2.new(1, -40, 0, 48)
-    BtnFrame.Position = UDim2.new(0, 20, 0, 180)
+    BtnFrame.Position = UDim2.new(0, 20, 0, 186)
     BtnFrame.BackgroundColor3 = Color3.fromRGB(60, 20, 180)
     BtnFrame.BorderSizePixel = 0
     BtnFrame.ZIndex = 13
@@ -398,7 +457,7 @@ local function createKeyGUI()
     local ErrLabel = Instance.new("TextLabel")
     ErrLabel.Name = "ErrorLabel"
     ErrLabel.Size = UDim2.new(1, -40, 0, 28)
-    ErrLabel.Position = UDim2.new(0, 20, 0, 242)
+    ErrLabel.Position = UDim2.new(0, 20, 0, 248)
     ErrLabel.BackgroundColor3 = Color3.fromRGB(80, 10, 30)
     ErrLabel.BackgroundTransparency = 1
     ErrLabel.Text = ""
@@ -414,24 +473,85 @@ local function createKeyGUI()
     ErrCorner.Parent = ErrLabel
 
     -- ═══════════════════════════════════════════════
-    --  DIVIDER dưới
+    --  DIVIDER dưới với shimmer
     -- ═══════════════════════════════════════════════
     local Divider2 = Instance.new("Frame")
     Divider2.Size = UDim2.new(1, -40, 0, 1)
-    Divider2.Position = UDim2.new(0, 20, 0, 284)
+    Divider2.Position = UDim2.new(0, 20, 0, 290)
     Divider2.BackgroundColor3 = Color3.fromRGB(50, 30, 100)
     Divider2.BorderSizePixel = 0
     Divider2.ZIndex = 13
     Divider2.Parent = Card
+    local Div2Grad = Instance.new("UIGradient")
+    Div2Grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(0,0,0)),
+        ColorSequenceKeypoint.new(0.4, Color3.fromRGB(80, 40, 180)),
+        ColorSequenceKeypoint.new(0.6, Color3.fromRGB(40, 120, 220)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(0,0,0)),
+    })
+    Div2Grad.Parent = Divider2
 
     -- ═══════════════════════════════════════════════
-    --  FOOTER
+    --  NÚT MUA KEY (nhỏ, outline style)
+    -- ═══════════════════════════════════════════════
+    local BuyKeyFrame = Instance.new("Frame")
+    BuyKeyFrame.Size = UDim2.new(1, -40, 0, 38)
+    BuyKeyFrame.Position = UDim2.new(0, 20, 0, 300)
+    BuyKeyFrame.BackgroundColor3 = Color3.fromRGB(12, 8, 28)
+    BuyKeyFrame.BorderSizePixel = 0
+    BuyKeyFrame.ZIndex = 13
+    BuyKeyFrame.Parent = Card
+    local BuyKeyCorner = Instance.new("UICorner")
+    BuyKeyCorner.CornerRadius = UDim.new(0, 10)
+    BuyKeyCorner.Parent = BuyKeyFrame
+    local BuyKeyStroke = Instance.new("UIStroke")
+    BuyKeyStroke.Color = Color3.fromRGB(255, 180, 30)
+    BuyKeyStroke.Thickness = 1.5
+    BuyKeyStroke.Parent = BuyKeyFrame
+    -- Animate stroke color gold pulse
+    task.spawn(function()
+        while BuyKeyFrame and BuyKeyFrame.Parent do
+            TweenService:Create(BuyKeyStroke, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                Color = Color3.fromRGB(255, 230, 100)
+            }):Play()
+            task.wait(1.8)
+        end
+    end)
+
+    local BuyKeyLabel = Instance.new("TextLabel")
+    BuyKeyLabel.Size = UDim2.new(1, 0, 1, 0)
+    BuyKeyLabel.BackgroundTransparency = 1
+    BuyKeyLabel.Text = "🛒  MUA KEY  •  Liên hệ shop để mua key"
+    BuyKeyLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+    BuyKeyLabel.TextSize = 11
+    BuyKeyLabel.Font = Enum.Font.GothamSemibold
+    BuyKeyLabel.TextXAlignment = Enum.TextXAlignment.Center
+    BuyKeyLabel.ZIndex = 14
+    BuyKeyLabel.Parent = BuyKeyFrame
+
+    local BuyKeyBtn = Instance.new("TextButton")
+    BuyKeyBtn.Size = UDim2.fromScale(1, 1)
+    BuyKeyBtn.BackgroundTransparency = 1
+    BuyKeyBtn.Text = ""
+    BuyKeyBtn.ZIndex = 15
+    BuyKeyBtn.Parent = BuyKeyFrame
+    BuyKeyBtn.MouseButton1Click:Connect(function()
+        TweenService:Create(BuyKeyFrame, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(40, 25, 10)}):Play()
+        task.delay(0.15, function()
+            TweenService:Create(BuyKeyFrame, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(12, 8, 28)}):Play()
+        end)
+        -- Hiện thông báo mua key
+        showToast("🛒 Vào server Discord để mua key!", Color3.fromRGB(160, 100, 20))
+    end)
+
+    -- ═══════════════════════════════════════════════
+    --  FOOTER + VERSION BADGE
     -- ═══════════════════════════════════════════════
     local Footer = Instance.new("TextLabel")
-    Footer.Size = UDim2.new(1, -40, 0, 30)
-    Footer.Position = UDim2.new(0, 20, 0, 294)
+    Footer.Size = UDim2.new(1, -40, 0, 22)
+    Footer.Position = UDim2.new(0, 20, 0, 348)
     Footer.BackgroundTransparency = 1
-    Footer.Text = "👑 Dev Gatinho  •  Mua key tại server của shop  🛒"
+    Footer.Text = "👑 Dev Gatinho  •  ANIME MOD HUB v1.0"
     Footer.TextColor3 = Color3.fromRGB(80, 60, 140)
     Footer.TextSize = 10
     Footer.Font = Enum.Font.Gotham
@@ -439,12 +559,9 @@ local function createKeyGUI()
     Footer.ZIndex = 13
     Footer.Parent = Card
 
-    -- ═══════════════════════════════════════════════
-    --  VERSION BADGE
-    -- ═══════════════════════════════════════════════
     local VerBadge = Instance.new("TextLabel")
     VerBadge.Size = UDim2.new(0, 80, 0, 18)
-    VerBadge.Position = UDim2.new(0, 20, 0, 326)
+    VerBadge.Position = UDim2.new(0, 20, 0, 378)
     VerBadge.BackgroundColor3 = Color3.fromRGB(40, 20, 80)
     VerBadge.BackgroundTransparency = 0.3
     VerBadge.Text = "v1.0 • SEA3"
@@ -4986,24 +5103,102 @@ game:GetService("StarterGui"):SetCore("SendNotification", {
     Text = "UI đã load thành công!\nChúc bạn farm vui vẻ!";
     Duration = 5;
 })
+-- ════════════════════════════════════════════════════════
+--  CIRCLE MENU BUTTON (avatar anime tròn - float draggable)
+-- ════════════════════════════════════════════════════════
 local l_ScreenGui_0 = Instance.new("ScreenGui")
 l_ScreenGui_0.Name = "ControlGUI"
+l_ScreenGui_0.ResetOnSpawn = false
+l_ScreenGui_0.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function()
+    if syn and syn.protect_gui then syn.protect_gui(l_ScreenGui_0) end
+end)
 l_ScreenGui_0.Parent = game.CoreGui
+
+-- Outer pulse ring (hiệu ứng nhịp đập)
+local PulseRing = Instance.new("Frame")
+PulseRing.Name = "PulseRing"
+PulseRing.Size = UDim2.new(0, 72, 0, 72)
+PulseRing.Position = UDim2.new(0.12, -6, 0.12, -6)
+PulseRing.AnchorPoint = Vector2.new(0, 0)
+PulseRing.BackgroundColor3 = Color3.fromRGB(255, 200, 30)
+PulseRing.BackgroundTransparency = 0.6
+PulseRing.BorderSizePixel = 0
+PulseRing.ZIndex = 1
+PulseRing.Parent = l_ScreenGui_0
+local PulseCorner = Instance.new("UICorner")
+PulseCorner.CornerRadius = UDim.new(1, 0)
+PulseCorner.Parent = PulseRing
+
+-- Gold ring (vòng vàng ngoài)
+local GoldRing = Instance.new("Frame")
+GoldRing.Name = "GoldRing"
+GoldRing.Size = UDim2.new(0, 64, 0, 64)
+GoldRing.Position = UDim2.new(0.12, -2, 0.12, -2)
+GoldRing.BackgroundColor3 = Color3.fromRGB(255, 200, 30)
+GoldRing.BorderSizePixel = 0
+GoldRing.ZIndex = 2
+GoldRing.Parent = l_ScreenGui_0
+local GoldCorner = Instance.new("UICorner")
+GoldCorner.CornerRadius = UDim.new(1, 0)
+GoldCorner.Parent = GoldRing
+
+-- Main image button (avatar)
 local l_ImageButton_0 = Instance.new("ImageButton")
-l_ImageButton_0.Size = UDim2.new(0, 50, 0, 50)
-l_ImageButton_0.Position = UDim2.new(0.15, 0, 0.15, 0)
+l_ImageButton_0.Name = "MenuCircle"
+l_ImageButton_0.Size = UDim2.new(0, 60, 0, 60)
+l_ImageButton_0.Position = UDim2.new(0.12, 0, 0.12, 0)
 l_ImageButton_0.Image = "rbxassetid://116828114235759"
-l_ImageButton_0.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+l_ImageButton_0.BackgroundColor3 = Color3.fromRGB(15, 10, 35)
 l_ImageButton_0.BorderSizePixel = 0
+l_ImageButton_0.ScaleType = Enum.ScaleType.Crop
+l_ImageButton_0.ZIndex = 3
 l_ImageButton_0.Parent = l_ScreenGui_0
 local l_UICorner_0 = Instance.new("UICorner")
 l_UICorner_0.CornerRadius = UDim.new(1, 0)
 l_UICorner_0.Parent = l_ImageButton_0
-local l_UIStroke_0 = Instance.new("UIStroke")
-l_UIStroke_0.Thickness = 2
-l_UIStroke_0.Color = Color3.fromRGB(255, 200, 0)
-l_UIStroke_0.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-l_UIStroke_0.Parent = l_ImageButton_0
+
+-- Animate gold ring pulse
+task.spawn(function()
+    local goldColors = {
+        Color3.fromRGB(255, 200, 30),
+        Color3.fromRGB(255, 240, 80),
+        Color3.fromRGB(255, 150, 0),
+        Color3.fromRGB(255, 200, 30),
+    }
+    local gi = 1
+    while GoldRing and GoldRing.Parent do
+        gi = gi % #goldColors + 1
+        TweenService:Create(GoldRing, TweenInfo.new(1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            BackgroundColor3 = goldColors[gi]
+        }):Play()
+        task.wait(1.0)
+    end
+end)
+
+-- Animate pulse ring (breathing effect)
+task.spawn(function()
+    while PulseRing and PulseRing.Parent do
+        TweenService:Create(PulseRing, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+            BackgroundTransparency = 0.85,
+            Size = UDim2.new(0, 78, 0, 78),
+        }):Play()
+        task.wait(0.85)
+        TweenService:Create(PulseRing, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.In), {
+            BackgroundTransparency = 0.5,
+            Size = UDim2.new(0, 70, 0, 70),
+        }):Play()
+        task.wait(0.85)
+    end
+end)
+
+-- Sync pulse ring position with button
+local function syncPulse()
+    local btnPos = l_ImageButton_0.Position
+    PulseRing.Position = UDim2.new(btnPos.X.Scale, btnPos.X.Offset - 5, btnPos.Y.Scale, btnPos.Y.Offset - 5)
+    GoldRing.Position = UDim2.new(btnPos.X.Scale, btnPos.X.Offset - 2, btnPos.Y.Scale, btnPos.Y.Offset - 2)
+end
+
 local v473 = true
 local v474 = nil
 local v475 = nil
@@ -5012,6 +5207,7 @@ local v477 = nil
 local function v480(v478)
     local v479 = v478.Position - v476
     l_ImageButton_0.Position = UDim2.new(v477.X.Scale, v477.X.Offset + v479.X, v477.Y.Scale, v477.Y.Offset + v479.Y)
+    syncPulse()
 end
 l_ImageButton_0.InputBegan:Connect(function(v481)
     if v481.UserInputType == Enum.UserInputType.Touch or v481.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -5036,6 +5232,15 @@ game:GetService("UserInputService").InputChanged:Connect(function(v483)
     end
 end)
 l_ImageButton_0.MouseButton1Click:Connect(function()
+    -- Press effect on gold ring
+    TweenService:Create(GoldRing, TweenInfo.new(0.1), {
+        BackgroundColor3 = Color3.fromRGB(255, 255, 150)
+    }):Play()
+    task.delay(0.15, function()
+        TweenService:Create(GoldRing, TweenInfo.new(0.15), {
+            BackgroundColor3 = Color3.fromRGB(255, 200, 30)
+        }):Play()
+    end)
     v473 = not v473
     if v473 then
         v466:Minimize(false)
@@ -5056,11 +5261,17 @@ local v493 = v466:MakeTab({"Teleport","rbxassetid://116828114235759"})
 local v494 = v466:MakeTab({"PvP,Player","rbxassetid://116828114235759"})
 local v495 = v466:MakeTab({"Shop","rbxassetid://116828114235759"})
 local v496 = v466:MakeTab({"Settings","rbxassetid://116828114235759"})
-v484:AddDiscordInvite({
-    Name = "Tham Gia Discord",
-    Description = "Link Sever Discord",
-    Logo = "rbxassetid://116828114235759",
-    Invite = " https://discord.gg/DKbu5RY67F"
+v484:AddParagraph({
+    Title = "📅  Hạn Sử Dụng Key",
+    Content = "HSD: Kiểm tra trong server Discord của shop\nKey hết hạn sẽ bị vô hiệu hoá tự động."
+})
+v484:AddParagraph({
+    Title = "⭐  Hiệu Ứng Premium",
+    Content = "• Mở khoá toàn bộ tính năng nâng cao\n• Auto Farm tốc độ cao + bỏ qua cooldown\n• Ưu tiên hỗ trợ & cập nhật sớm nhất\n• Hiệu ứng giao diện đặc biệt (VIP)"
+})
+v484:AddParagraph({
+    Title = "🔰  Hiệu Ứng Thường",
+    Content = "• Sử dụng các tính năng cơ bản\n• Auto Farm tiêu chuẩn\n• Cập nhật theo phiên bản chính\n• Giao diện mặc định"
 })
 local _ = v485:AddSection({"Select Melee,Sword,Gun,Fruit"})
 _G.SelectWeapon = "Melee"
