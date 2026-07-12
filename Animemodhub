@@ -1274,9 +1274,21 @@ local function startKeyGate(onSuccess)
                 end)
 
                 -- Mở giao diện chức năng — bọc pcall để lỗi script không chặn flow
+                -- FIX v9.1.3.1: trước đây nếu onSuccess() lỗi, chỉ có warn() ra console —
+                -- người chơi không thấy gì cả (GUI key-gate đã bị Destroy ở trên rồi), nên
+                -- cảm giác y hệt "crash" dù key đúng. Giờ luôn hiện notification rõ ràng
+                -- + toast để người chơi biết cần Rejoin/thử lại thay vì im lặng.
                 local ok, err = pcall(onSuccess)
                 if not ok then
                     warn("[AnimeModHub] onSuccess error: " .. tostring(err))
+                    pcall(function()
+                        game:GetService("StarterGui"):SetCore("SendNotification", {
+                            Title = "❌ ANIME MOD HUB";
+                            Text = "Không thể tải menu chức năng: " .. tostring(err) .. " — vui lòng thử Rejoin server.";
+                            Duration = 10;
+                        })
+                    end)
+                    showToast("Lỗi tải menu! Vui lòng Rejoin server và thử lại.", nil, "error")
                 end
             else
                 -- ── KEY KHÔNG HỢP LỆ ──
@@ -1338,13 +1350,31 @@ end
 startKeyGate(function()
 -- ↑ Phần xác thực key kết thúc. Script gốc bắt đầu từ đây ↓
 
-
-hookfunction(require(game:GetService("ReplicatedStorage").Effect.Container.Death), function()
-    -- empty block
+-- FIX v9.1.3.1: hookfunction/require ở đây trước đây KHÔNG được bọc pcall.
+-- Nếu executor không hỗ trợ hookfunction, hoặc module Effect.Container.Death/Respawn
+-- chưa kịp replicate/đổi đường dẫn do game update, hàm onSuccess sẽ ném lỗi NGAY LẬP TỨC
+-- tại đây — tức là TRƯỚC CẢ khi kiểm tra game Blox Fruits và trước khi menu được dựng.
+-- Vì key-gate GUI đã bị Destroy trước khi gọi onSuccess (xem pcall(onSuccess) phía trên),
+-- lỗi này chỉ in ra console (warn) mà người chơi không thấy gì cả → CẢM GIÁC NHƯ "CRASH"
+-- dù key đã nhập đúng. Bọc pcall + thông báo rõ ràng để không bao giờ bị "im lặng" nữa.
+local _hookOk, _hookErr = pcall(function()
+    hookfunction(require(game:GetService("ReplicatedStorage").Effect.Container.Death), function()
+        -- empty block
+    end)
+    hookfunction(require(game:GetService("ReplicatedStorage").Effect.Container.Respawn), function()
+        -- empty block
+    end)
 end)
-hookfunction(require(game:GetService("ReplicatedStorage").Effect.Container.Respawn), function()
-    -- empty block
-end)
+if not _hookOk then
+    warn("[AnimeModHub] Cảnh báo: hookfunction Death/Respawn thất bại (bỏ qua, không chặn menu): " .. tostring(_hookErr))
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "⚠️ ANIME MOD HUB";
+            Text = "Một số hiệu ứng phụ không thể hook (executor không hỗ trợ) — menu vẫn tiếp tục tải.";
+            Duration = 5;
+        })
+    end)
+end
 -- Kiểm tra game Blox Fruits
 if game.PlaceId == 85211729168715 or game.PlaceId == 2753915549 then
     World1 = true
