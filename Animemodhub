@@ -783,6 +783,11 @@ local function startKeyGate(onSuccess)
     local savedData = loadSavedKey()
     if savedData and savedData.key and savedData.key ~= "" then
         input.Text = savedData.key
+        -- Khôi phục thông tin đã lưu
+        if savedData.keyType then _currentKeyType = savedData.keyType end
+        if savedData.expireTime and savedData.expireTime > 0 then
+            _currentExpireTime = savedData.expireTime
+        end
         -- Hiện gợi ý
         task.delay(0.3, function()
             if errLabel and errLabel.Parent then
@@ -913,28 +918,34 @@ local function startKeyGate(onSuccess)
                     end
                     _currentKeyType = keyType
 
-                    -- Lấy expire time (fix: thêm nhiều field names)
+                    -- Lấy expire time (fix: đọc đủ fields + parse cả string datetime)
                     local expireTime = 0
-                    if result.expireTime then
-                        expireTime = tonumber(result.expireTime) or 0
-                    elseif result.expire_time then
-                        expireTime = tonumber(result.expire_time) or 0
-                    elseif result.expires_at then
-                        expireTime = tonumber(result.expires_at) or 0
-                    elseif result.expire then
-                        expireTime = tonumber(result.expire) or 0
-                    elseif result.expiry then
-                        expireTime = tonumber(result.expiry) or 0
-                    elseif result.expiration then
-                        expireTime = tonumber(result.expiration) or 0
-                    elseif result.hsd then
-                        expireTime = tonumber(result.hsd) or 0
-                    elseif result.expiresAt then
-                        expireTime = tonumber(result.expiresAt) or 0
-                    end
-                    -- Nếu là milliseconds (>1e12) thì chia 1000
-                    if expireTime > 1e12 then
-                        expireTime = math.floor(expireTime / 1000)
+                    local fieldOrder2 = {
+                        "expireTime","expire_time","expires_at","expire","expiry",
+                        "expiration","hsd","expiresAt","end_time","endTime","expiredAt"
+                    }
+                    for _, fld in ipairs(fieldOrder2) do
+                        local v = result[fld]
+                        if v ~= nil and v ~= "" then
+                            local n = tonumber(v)
+                            if n then
+                                if n > 1e12 then n = math.floor(n/1000) end
+                                expireTime = n
+                            else
+                                -- Parse string datetime "HH:MM DD/MM/YYYY"
+                                local sv = tostring(v)
+                                local h, m2, d2, mo2, y2 = sv:match("(%d+):(%d+)%s+(%d+)/(%d+)/(%d+)")
+                                if h then
+                                    expireTime = os.time({year=tonumber(y2),month=tonumber(mo2),day=tonumber(d2),hour=tonumber(h),min=tonumber(m2),sec=0})
+                                else
+                                    local d3,mo3,y3,h3,m3 = sv:match("(%d+)/(%d+)/(%d+)%s+(%d+):(%d+)")
+                                    if d3 then
+                                        expireTime = os.time({year=tonumber(y3),month=tonumber(mo3),day=tonumber(d3),hour=tonumber(h3),min=tonumber(m3),sec=0})
+                                    end
+                                end
+                            end
+                            if expireTime > 0 then break end
+                        end
                     end
                     _currentExpireTime = expireTime
 
@@ -5043,18 +5054,40 @@ local function CreateAnimeModUILibrary()
         end)
 
         local _savedSize = UDim2.new(0, 560, 0, 380)
+
+        -- Lưu current size trước khi minimize
+        local function saveCurrentSize()
+            _savedSize = UDim2.new(0, main.AbsoluteSize.X, 0, main.AbsoluteSize.Y)
+        end
+
         function window:Minimize(state)
             self.Minimized = state and true or false
+            if self.Minimized then
+                -- ẨN HOÀN TOÀN toàn bộ frame chính (kể cả top bar)
+                saveCurrentSize()
+                TweenService:Create(main, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+                    Size = UDim2.new(0, main.AbsoluteSize.X, 0, 0),
+                    BackgroundTransparency = 1,
+                }):Play()
+                task.delay(0.24, function()
+                    if main and main.Parent then
+                        main.Visible = false
+                        main.Size = _savedSize
+                        main.BackgroundTransparency = 0
+                    end
+                end)
+            else
+                -- HIỆN LẠI với animation scale in
+                main.Size = UDim2.new(0, _savedSize.X.Offset, 0, 0)
+                main.BackgroundTransparency = 0
+                main.Visible = true
+                TweenService:Create(main, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                    Size = _savedSize,
+                }):Play()
+            end
             tabList.Visible = not self.Minimized
             pages.Visible = not self.Minimized
             resizeHandle.Visible = not self.Minimized
-            local curW = main.AbsoluteSize.X
-            if not self.Minimized then
-                _savedSize = UDim2.new(0, curW, 0, main.AbsoluteSize.Y)
-            end
-            TweenService:Create(main, TweenInfo.new(0.25, Enum.EasingStyle.Quart), {
-                Size = self.Minimized and UDim2.new(0, curW, 0, 42) or _savedSize
-            }):Play()
             minimizeButton.Text = self.Minimized and "+" or "—"
         end
 
@@ -5583,11 +5616,19 @@ local function syncPulse()
     GoldRing.Position = UDim2.new(btnPos.X.Scale, btnPos.X.Offset - 2, btnPos.Y.Scale, btnPos.Y.Offset - 2)
 end
 
-local v473 = true
+-- ── Ban đầu menu ẨN, chỉ hiện logo tròn ──
+local v473 = false  -- false = đang ẩn
 local v474 = nil
 local v475 = nil
 local v476 = nil
 local v477 = nil
+-- Ẩn menu ngay từ đầu (không animate, chỉ set Visible = false)
+do
+    local _mainRef = v466 and v466.Main
+    if _mainRef then
+        _mainRef.Visible = false
+    end
+end
 local function v480(v478)
     local v479 = v478.Position - v476
     l_ImageButton_0.Position = UDim2.new(v477.X.Scale, v477.X.Offset + v479.X, v477.Y.Scale, v477.Y.Offset + v479.Y)
@@ -5625,10 +5666,13 @@ l_ImageButton_0.MouseButton1Click:Connect(function()
             BackgroundColor3 = Color3.fromRGB(255, 200, 30)
         }):Play()
     end)
+    -- Toggle: v473=true → menu đang hiện → ẩn; v473=false → menu đang ẩn → hiện
     v473 = not v473
     if v473 then
+        -- Hiện menu
         v466:Minimize(false)
     else
+        -- Ẩn menu (kể cả top bar)
         v466:Minimize(true)
     end
 end)
@@ -5650,31 +5694,138 @@ local hsdParagraph = v484:AddParagraph({
     Title = "📅  Hạn Sử Dụng Key (HSD)",
     Content = "Đang tải thông tin key..."
 })
--- Cập nhật HSD thực tế NGAY LẬP TỨC sau khi UI load
+
+-- ── Parse datetime string từ server: "HH:MM DD/MM/YYYY" hoặc "DD/MM/YYYY HH:MM" ──
+local function parseDateTimeString(s)
+    if not s then return 0 end
+    s = tostring(s)
+    -- Format 1: "19:36 12/07/2026"  (HH:MM DD/MM/YYYY)
+    local h, m, d, mo, y = s:match("(%d+):(%d+)%s+(%d+)/(%d+)/(%d+)")
+    if h then
+        -- os.time với UTC: tính offset thủ công (+7 VN)
+        local utcOffset = 7 * 3600  -- Vietnam UTC+7
+        local t = os.time({year=tonumber(y), month=tonumber(mo), day=tonumber(d),
+                           hour=tonumber(h), min=tonumber(m), sec=0})
+        -- os.time trả về local time, trừ offset để ra UTC nếu cần
+        return t
+    end
+    -- Format 2: "12/07/2026 19:36"
+    local d2, mo2, y2, h2, m2 = s:match("(%d+)/(%d+)/(%d+)%s+(%d+):(%d+)")
+    if d2 then
+        local t = os.time({year=tonumber(y2), month=tonumber(mo2), day=tonumber(d2),
+                           hour=tonumber(h2), min=tonumber(m2), sec=0})
+        return t
+    end
+    -- Format 3: số thuần (Unix timestamp)
+    local n = tonumber(s)
+    if n then
+        if n > 1e12 then n = math.floor(n/1000) end
+        return n
+    end
+    return 0
+end
+
+-- ── Fetch fresh data từ server để lấy HSD chính xác ──
+local function fetchFreshExpiry(callback)
+    if _currentVerifiedKey == "" then callback(0) return end
+    task.spawn(function()
+        local url = SERVER_URL .. "/api/verify?key=" .. HttpService:UrlEncode(_currentVerifiedKey) .. "&app=" .. HttpService:UrlEncode(APP_ID)
+        local ok, res = pcall(function()
+            local resp = game:HttpGet(url)
+            return HttpService:JSONDecode(resp)
+        end)
+        if ok and res and res.valid then
+            -- Thử tất cả field có thể có HSD
+            local expireTime = 0
+            local fieldOrder = {
+                "expireTime","expire_time","expires_at","expire","expiry",
+                "expiration","hsd","expiresAt","end_time","endTime","expiredAt"
+            }
+            for _, field in ipairs(fieldOrder) do
+                local v = res[field]
+                if v ~= nil and v ~= "" then
+                    local n = tonumber(v)
+                    if n then
+                        -- Số: Unix timestamp
+                        if n > 1e12 then n = math.floor(n/1000) end
+                        expireTime = n
+                    else
+                        -- String datetime
+                        expireTime = parseDateTimeString(v)
+                    end
+                    if expireTime > 0 then break end
+                end
+            end
+            -- Cũng cập nhật biến global
+            if expireTime > 0 then _currentExpireTime = expireTime end
+            callback(expireTime)
+        else
+            callback(_currentExpireTime)
+        end
+    end)
+end
+
 local function buildHSDText()
-    local keyDisplay = _currentVerifiedKey ~= "" and ("Key: " .. string.sub(_currentVerifiedKey, 1, 8) .. "****") or "Key: Chưa đăng nhập"
+    local keyDisplay
+    if _currentVerifiedKey ~= "" then
+        -- Hiện đầy đủ hơn: ví dụ "NÚNG À EM-****"
+        local keyShort = string.sub(_currentVerifiedKey, 1, 12)
+        keyDisplay = "Key: " .. keyShort .. "****"
+    else
+        keyDisplay = "Key: Chưa đăng nhập"
+    end
+
     local typeIcon
     if _currentKeyType == "PREMIUM" or _currentKeyType == "VIP" or _currentKeyType == "PRO" then
         typeIcon = "👑 PREMIUM"
     else
         typeIcon = "🔰 THƯỜNG"
     end
+
     local hsdText
-    if _currentExpireTime and _currentExpireTime > 0 then
-        local remaining = formatExpiry(_currentExpireTime)
-        local expireDate = os.date("*!%d/%m/%Y %H:%M", _currentExpireTime)
-        if remaining == "ĐÃ HẾT HẠN" then
-            hsdText = "⛔ KEY ĐÃ HẾT HẠN"
+    local expTime = _currentExpireTime
+    if expTime and expTime > 0 then
+        local now = os.time()
+        local diff = expTime - now
+        if diff <= 0 then
+            hsdText = "HSD: ⛔ ĐÃ HẾT HẠN"
         else
-            hsdText = "HSD: Còn lại " .. remaining .. "\nHết hạn: " .. expireDate .. " (UTC)"
+            -- Format đúng như server: "Còn X giờ Y phút" hoặc "Còn X ngày Y giờ"
+            local days  = math.floor(diff / 86400)
+            local hours = math.floor((diff % 86400) / 3600)
+            local mins  = math.floor((diff % 3600) / 60)
+            local secs  = diff % 60
+            local remainStr
+            if days > 0 then
+                remainStr = string.format("Còn %d ngày %d giờ %d phút", days, hours, mins)
+            elseif hours > 0 then
+                remainStr = string.format("Còn %d giờ %d phút %d giây", hours, mins, secs)
+            else
+                remainStr = string.format("Còn %d phút %d giây", mins, secs)
+            end
+            -- Ngày hết hạn local (giống server hiển thị)
+            local expireStr = os.date("%H:%M %d/%m/%Y", expTime)
+            hsdText = "HSD: " .. expireStr .. "\n⏳ " .. remainStr
         end
     else
-        hsdText = "HSD: Kiểm tra trong server Discord của shop"
+        -- Không có expire time → thử fetch từ server
+        hsdText = "HSD: Đang lấy thông tin..."
     end
+
     return keyDisplay .. "\nLoại key: " .. typeIcon .. "\n" .. hsdText .. "\n\n• Key hết hạn sẽ tự động đăng xuất\n• Mỗi key giới hạn 1 thiết bị"
 end
+
 -- Cập nhật ngay lập tức
 pcall(function() hsdParagraph:Set(buildHSDText()) end)
+
+-- Fetch fresh từ server để đảm bảo HSD đúng
+fetchFreshExpiry(function(freshTime)
+    if freshTime > 0 then
+        _currentExpireTime = freshTime
+    end
+    pcall(function() hsdParagraph:Set(buildHSDText()) end)
+end)
+
 -- Cập nhật HSD mỗi 30 giây (đếm ngược realtime)
 task.spawn(function()
     while task.wait(30) do
