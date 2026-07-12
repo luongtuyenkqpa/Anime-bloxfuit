@@ -1345,6 +1345,47 @@ local function startKeyGate(onSuccess)
 end
 
 -- ══════════════════════════════════════════════════════════
+--  GLOBAL FORWARD DECLARATION: parseDateTimeString
+--  PHẢI là global (không dùng "local") vì startKeyGate được compile
+--  TRƯỚC dòng này → doVerify bên trong dùng global lookup (_ENV).
+--  Nếu dùng "local", local này sẽ KHÔNG được tìm thấy bởi doVerify.
+--  Root cause của bug: key đúng nhưng không vào menu được.
+-- ══════════════════════════════════════════════════════════
+parseDateTimeString = function(s)
+    if not s then return 0 end
+    s = tostring(s)
+    -- Format 0 (QUAN TRỌNG): ISO 8601 — "2026-07-12T19:36:00.000Z"
+    local y0, mo0, d0, h0, m0, sec0 = s:match("(%d%d%d%d)-(%d%d)-(%d%d)T(%d%d):(%d%d):(%d%d)")
+    if y0 then
+        local t = os.time({year=tonumber(y0), month=tonumber(mo0), day=tonumber(d0),
+                           hour=tonumber(h0), min=tonumber(m0), sec=tonumber(sec0 or 0)})
+        local utcNow   = os.time(os.date("!*t"))
+        local localNow = os.time()
+        local offsetSec = localNow - utcNow
+        return t + offsetSec
+    end
+    -- Format 1: "19:36 12/07/2026"
+    local h, m, d, mo, y = s:match("(%d+):(%d+)%s+(%d+)/(%d+)/(%d+)")
+    if h then
+        return os.time({year=tonumber(y), month=tonumber(mo), day=tonumber(d),
+                        hour=tonumber(h), min=tonumber(m), sec=0})
+    end
+    -- Format 2: "12/07/2026 19:36"
+    local d2, mo2, y2, h2, m2 = s:match("(%d+)/(%d+)/(%d+)%s+(%d+):(%d+)")
+    if d2 then
+        return os.time({year=tonumber(y2), month=tonumber(mo2), day=tonumber(d2),
+                        hour=tonumber(h2), min=tonumber(m2), sec=0})
+    end
+    -- Format 3: số thuần (Unix timestamp)
+    local n = tonumber(s)
+    if n then
+        if n > 1e12 then n = math.floor(n/1000) end
+        return n
+    end
+    return 0
+end
+
+-- ══════════════════════════════════════════════════════════
 --  GỌI KEY GATE — toàn bộ script gốc nằm trong hàm này
 -- ══════════════════════════════════════════════════════════
 startKeyGate(function()
