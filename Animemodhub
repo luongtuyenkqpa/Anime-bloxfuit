@@ -1190,25 +1190,48 @@ local function startKeyGate(onSuccess)
 
                     -- Lấy expire time — server trả về "expiresAt" dạng ISO 8601
                     -- VD: "2026-07-12T19:36:00.000Z" (UTC), cần parse + bù timezone
+                    -- FIX: inline parser thay vì parseDateTimeString (định nghĩa sau dòng 6000
+                    --      nên tại đây chưa tồn tại → crash im lặng → menu không mở)
                     local expireTime = 0
+                    local function _parseExpiryInline(s)
+                        if not s then return 0 end
+                        s = tostring(s)
+                        local y,mo,d,h,m,sec = s:match("(%d%d%d%d)-(%d%d)-(%d%d)T(%d%d):(%d%d):(%d%d)")
+                        if y then
+                            local ok2, t = pcall(os.time, {year=tonumber(y),month=tonumber(mo),day=tonumber(d),
+                                                           hour=tonumber(h),min=tonumber(m),sec=tonumber(sec or 0)})
+                            if ok2 and t then
+                                local utcNow = os.time(os.date("!*t"))
+                                return t + (os.time() - utcNow)
+                            end
+                        end
+                        local h2,m2,d2,mo2,y2 = s:match("(%d+):(%d+)%s+(%d+)/(%d+)/(%d+)")
+                        if h2 then local ok2,t=pcall(os.time,{year=tonumber(y2),month=tonumber(mo2),day=tonumber(d2),hour=tonumber(h2),min=tonumber(m2),sec=0}) if ok2 and t then return t end end
+                        local d3,mo3,y3,h3,m3 = s:match("(%d+)/(%d+)/(%d+)%s+(%d+):(%d+)")
+                        if d3 then local ok2,t=pcall(os.time,{year=tonumber(y3),month=tonumber(mo3),day=tonumber(d3),hour=tonumber(h3),min=tonumber(m3),sec=0}) if ok2 and t then return t end end
+                        local n = tonumber(s)
+                        if n then if n > 1e12 then n = math.floor(n/1000) end return n end
+                        return 0
+                    end
                     local fieldOrder2 = {
                         "expiresAt","expireTime","expire_time","expires_at","expire",
                         "expiry","expiration","hsd","end_time","endTime","expiredAt"
                     }
-                    for _, fld in ipairs(fieldOrder2) do
-                        local v = result[fld]
-                        if v ~= nil and v ~= "" and v ~= false then
-                            local n = tonumber(v)
-                            if n then
-                                if n > 1e12 then n = math.floor(n/1000) end
-                                expireTime = n
-                            else
-                                -- Dùng parseDateTimeString đã hỗ trợ ISO 8601
-                                expireTime = parseDateTimeString(tostring(v))
+                    pcall(function()
+                        for _, fld in ipairs(fieldOrder2) do
+                            local v = result[fld]
+                            if v ~= nil and v ~= "" and v ~= false then
+                                local n = tonumber(v)
+                                if n then
+                                    if n > 1e12 then n = math.floor(n/1000) end
+                                    expireTime = n
+                                else
+                                    expireTime = _parseExpiryInline(tostring(v))
+                                end
+                                if expireTime > 0 then break end
                             end
-                            if expireTime > 0 then break end
                         end
-                    end
+                    end)
                     _currentExpireTime = expireTime
 
                     -- Lưu key thành công
