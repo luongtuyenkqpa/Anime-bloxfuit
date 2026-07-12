@@ -6,6 +6,11 @@
 local SERVER_URL = "https://server-proxy-v2c0.onrender.com"
 local APP_ID     = "anime-mod-hub-v1"
 
+-- ── Device ID riêng cho script Lua (prefix "LUA-" để server phân biệt với VM/web)
+-- Dùng LocalPlayer.UserId làm fingerprint ổn định theo tài khoản Roblox.
+-- Prefix "LUA-" đảm bảo server không ghép chung slot với script Violentmonkey ("VM-").
+local _LUA_DEVICE_ID = "LUA-" .. tostring(game:GetService("Players").LocalPlayer.UserId)
+
 -- ──────────────────────────────────────────────────────────
 --  UI: Tạo ScreenGui đăng nhập key
 -- ──────────────────────────────────────────────────────────
@@ -707,9 +712,12 @@ local function httpPost(url, payload)
     end
 
     -- Fallback cuối: GET (Roblox Studio / executor không hỗ trợ POST body)
+    -- Cũng gửi device + platform để server phân slot đúng
     local getUrl = url
-        .. "?key=" .. HttpService:UrlEncode(tostring(payload.key or ""))
-        .. "&app=" .. HttpService:UrlEncode(tostring(payload.app or ""))
+        .. "?key="      .. HttpService:UrlEncode(tostring(payload.key      or ""))
+        .. "&app="      .. HttpService:UrlEncode(tostring(payload.app      or ""))
+        .. "&device="   .. HttpService:UrlEncode(tostring(payload.device   or ""))
+        .. "&platform=" .. HttpService:UrlEncode(tostring(payload.platform or ""))
     local ok, result = pcall(function()
         return game:HttpGet(getUrl)
     end)
@@ -730,7 +738,7 @@ local function startBackgroundKeyCheck(key, onInvalid)
             local ok, result = pcall(function()
                 return HttpService:JSONDecode(httpPost(
                     SERVER_URL .. "/api/verify",
-                    { key = key, app = APP_ID }
+                    { key = key, app = APP_ID, device = _LUA_DEVICE_ID, platform = "roblox" }
                 ))
             end)
             if ok and result then
@@ -758,11 +766,12 @@ end
 local function verifyKey(key, callback)
     -- Gửi POST JSON body thay vì GET ?key=... để bypass HoHo Hub key-format hook
     -- v2: xử lý nil response, JSON rỗng, timeout rõ ràng
+    -- v3: gửi kèm device ID (prefix "LUA-") để server phân slot riêng với Violentmonkey
     local rawBody = nil
     local fetchOk = pcall(function()
         rawBody = httpPost(
             SERVER_URL .. "/api/verify",
-            { key = key, app = APP_ID }
+            { key = key, app = APP_ID, device = _LUA_DEVICE_ID, platform = "roblox" }
         )
     end)
 
@@ -6182,7 +6191,7 @@ local function fetchFreshExpiry(callback)
         local ok, res = pcall(function()
             return HttpService:JSONDecode(httpPost(
                 SERVER_URL .. "/api/verify",
-                { key = _currentVerifiedKey, app = APP_ID }
+                { key = _currentVerifiedKey, app = APP_ID, device = _LUA_DEVICE_ID, platform = "roblox" }
             ))
         end)
         if ok and res and res.valid then
