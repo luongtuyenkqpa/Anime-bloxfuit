@@ -776,36 +776,33 @@ local function stopBackgroundKeyCheck()
 end
 
 -- ──────────────────────────────────────────────────────────
-local function verifyKey(key, callback)
-    -- FIX v9.1.2: Toàn bộ logic chạy trong task.spawn riêng để callback
-    -- có thể dùng task.wait() mà không block thread gọi.
-    task.spawn(function()
-        local rawBody = nil
-        local fetchOk = pcall(function()
-            rawBody = httpPost(
-                SERVER_URL .. "/api/verify",
-                { key = key, app = APP_ID, device = _LUA_DEVICE_ID, platform = "roblox" }
-            )
-        end)
-
-        -- Không nhận được response gì từ server
-        if not fetchOk or not rawBody or rawBody == "" then
-            task.spawn(callback, { valid = false, reason = "network_error" })
-            return
-        end
-
-        -- Parse JSON response
-        local parseOk, result = pcall(function()
-            return HttpService:JSONDecode(rawBody)
-        end)
-
-        if parseOk and result and type(result) == "table" then
-            task.spawn(callback, result)
-        else
-            -- Server trả về response không hợp lệ (bị truncate, HTML error page...)
-            task.spawn(callback, { valid = false, reason = "server_error" })
-        end
+-- FIX v9.1.3: verifyKey là hàm SYNCHRONOUS thuần túy — chỉ gửi HTTP và trả kết quả.
+-- Việc tạo thread/task.spawn hoàn toàn do doVerify quản lý để tránh thread nesting.
+local function verifyKey(key)
+    local rawBody = nil
+    local fetchOk = pcall(function()
+        rawBody = httpPost(
+            SERVER_URL .. "/api/verify",
+            { key = key, app = APP_ID, device = _LUA_DEVICE_ID, platform = "roblox" }
+        )
     end)
+
+    -- Không nhận được response gì từ server
+    if not fetchOk or not rawBody or rawBody == "" then
+        return { valid = false, reason = "network_error" }
+    end
+
+    -- Parse JSON response
+    local parseOk, result = pcall(function()
+        return HttpService:JSONDecode(rawBody)
+    end)
+
+    if parseOk and result and type(result) == "table" then
+        return result
+    else
+        -- Server trả về response không hợp lệ (bị truncate, HTML error page...)
+        return { valid = false, reason = "server_error" }
+    end
 end
 
 -- ──────────────────────────────────────────────────────────
@@ -1119,62 +1116,63 @@ local function startKeyGate(onSuccess)
         end)
     end
 
-    -- FIX v9.1.2: _guiAlive dùng để kiểm tra GUI còn tồn tại trước khi truy cập
+    -- FIX v9.1.3: _guiAlive theo dõi vòng đời GUI để tránh truy cập sau khi Destroy
     local _guiAlive = true
-
-    local function safeSetLoading(loading)
-        if not _guiAlive then return end
-        pcall(setLoading, loading)
-    end
+    -- _verifying ngăn bấm nút nhiều lần trong khi đang xác thực
+    local _verifying = false
 
     local function doVerify()
+        -- Chặn bấm 2 lần
+        if _verifying or not _guiAlive then return end
+
         local key = input.Text:match("^%s*(.-)%s*$") -- trim
         if key == "" then
             setError("⚠️ Please enter your key.")
             return
         end
 
+        _verifying = true
         errLabel.Text = ""
         errLabel.BackgroundTransparency = 1
         setLoading(true)
-
-        -- Vô hiệu hoá nút trong lúc đang xác thực để tránh bấm nhiều lần
         btn.Active = false
 
-        -- FIX: Dùng biến số nguyên tử thay vì boolean để tránh race condition
-        -- verifyDone = 0 (chưa xong), 1 (đã xử lý)
-        local verifyDone = false
+        -- FIX v9.1.3: Toàn bộ verify flow nằm trong MỘT task.spawn duy nhất.
+        -- verifyKey() là synchronous → httpPost block thread này cho đến khi xong.
+        -- Không có callback pattern, không có thread nesting, không có race condition.
+        task.spawn(function()
+            -- ── Gọi server (blocking trên thread này) ──
+            local result = nil
+            local fetchTimedOut = false
 
-        -- Timeout 20 giây — nếu server không phản hồi, hiện lỗi thay vì đơ mãi
-        task.delay(20, function()
-            if verifyDone then return end
-            verifyDone = true
-            -- Dùng task.spawn thay vì task.defer để đảm bảo chạy ngay frame này
-            task.spawn(function()
-                safeSetLoading(false)
-                if _guiAlive then
-                    pcall(function() btn.Active = true end)
-                    setError(ERROR_MESSAGES["network_error"])
-                end
-                showToast(ERROR_MESSAGES["network_error"], nil, "warning")
+            -- Timeout riêng: hủy nếu httpPost bị treo quá 20s
+            local timeoutThread = task.delay(20, function()
+                fetchTimedOut = true
             end)
-        end)
 
-        -- FIX: verifyKey đã tự chạy trong task.spawn nên KHÔNG cần bọc thêm task.spawn nữa
-        verifyKey(key, function(result)
-            if verifyDone then return end  -- timeout đã xử lý rồi
-            verifyDone = true
+            result = verifyKey(key)
 
-            safeSetLoading(false)
-            if _guiAlive then
-                pcall(function() btn.Active = true end)
+            -- Nếu timeout đã kích hoạt thì bỏ qua kết quả trả về
+            if fetchTimedOut then
+                result = { valid = false, reason = "network_error" }
+            else
+                -- Hủy timeout vì đã có kết quả
+                pcall(task.cancel, timeoutThread)
             end
 
+            -- ── Xử lý kết quả ──
+            if not _guiAlive then return end -- GUI đã bị đóng bởi luồng khác
+
+            _verifying = false
+            setLoading(false)
+            pcall(function() btn.Active = true end)
+
             if result.valid then
+                -- ── KEY HỢP LỆ ──
                 keyVerified = true
                 _currentVerifiedKey = key
+
                 -- Xác định loại key từ server response
-                -- Server trả về field "type" với giá trị lowercase: "premium" / "normal" / null
                 local keyType = "NORMAL"
                 local rawType = ""
                 if result.type then
@@ -1192,7 +1190,7 @@ local function startKeyGate(onSuccess)
                 end
                 _currentKeyType = keyType
 
-                -- Lấy expire time — server trả về "expiresAt" dạng ISO 8601
+                -- Lấy expire time
                 local expireTime = 0
                 local fieldOrder2 = {
                     "expiresAt","expireTime","expire_time","expires_at","expire",
@@ -1212,35 +1210,29 @@ local function startKeyGate(onSuccess)
                     end
                 end
                 _currentExpireTime = expireTime
-
-                -- Lưu key thành công
                 saveKey(key, keyType, expireTime)
 
-                -- FIX: Bọc tất cả thao tác GUI trong pcall vì GUI có thể bị destroy bởi luồng khác
-                pcall(function()
-                    if _guiAlive then
-                        inputStroke.Color = Color3.fromRGB(50, 200, 80)
-                    end
-                end)
+                -- Đổi màu input stroke thành xanh
+                pcall(function() inputStroke.Color = Color3.fromRGB(50, 200, 80) end)
 
-                local card = _guiAlive and gui:FindFirstChild("Card") or nil
+                -- Hiệu ứng thành công + toast
+                local card = gui:FindFirstChild("Card")
                 if keyType == "PREMIUM" or keyType == "VIP" then
                     showToast("KEY PREMIUM! Loading script...", Color3.fromRGB(200, 140, 0), "success")
-                    if card and _guiAlive then pcall(playVipSuccessEffect, card) end
+                    if card then pcall(playVipSuccessEffect, card) end
                     task.wait(1.2)
                 else
                     showToast("Key verified! Loading script...", Color3.fromRGB(30, 140, 60), "success")
-                    if card and _guiAlive then pcall(playNormalSuccessEffect, card) end
+                    if card then pcall(playNormalSuccessEffect, card) end
                     task.wait(0.8)
                 end
 
-                -- FIX: Chỉ fade và destroy nếu GUI vẫn còn sống
+                -- Fade out key gate GUI
                 if _guiAlive then
                     local overlay = gui:FindFirstChild("Overlay")
                     if overlay then
                         TweenService:Create(overlay, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
                     end
-                    -- Re-query card sau task.wait vì card ref có thể stale
                     local card2 = gui:FindFirstChild("Card")
                     if card2 then
                         TweenService:Create(card2, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
@@ -1248,11 +1240,11 @@ local function startKeyGate(onSuccess)
                     task.wait(0.45)
                 end
 
-                -- FIX: Đánh dấu GUI không còn tồn tại TRƯỚC khi destroy để các luồng khác biết
+                -- Đánh dấu GUI chết trước khi Destroy
                 _guiAlive = false
                 pcall(function() gui:Destroy() end)
 
-                -- Bắt đầu background checker
+                -- Bắt đầu background key checker
                 startBackgroundKeyCheck(key, function(reason)
                     stopBackgroundKeyCheck()
                     keyVerified = false
@@ -1281,34 +1273,32 @@ local function startKeyGate(onSuccess)
                     startKeyGate(onSuccess)
                 end)
 
-                -- FIX: Bọc onSuccess trong pcall để lỗi trong script chính
-                -- không khiến giao diện chức năng bị đen / không mở
+                -- Mở giao diện chức năng — bọc pcall để lỗi script không chặn flow
                 local ok, err = pcall(onSuccess)
                 if not ok then
                     warn("[AnimeModHub] onSuccess error: " .. tostring(err))
                 end
             else
+                -- ── KEY KHÔNG HỢP LỆ ──
                 local reason = result.reason or "unknown"
                 local msg = ERROR_MESSAGES[reason] or ("❌ Invalid key (" .. reason .. ")")
+
                 if _guiAlive then
                     setError(msg)
                     if reason == "expired" or reason == "banned" or reason == "key_not_found" then
                         deleteSavedKey()
                         pcall(function() input.Text = "" end)
                     end
-                end
-                local tType = TOAST_TYPE[reason] or "error"
-                showToast(msg, nil, tType)
-                if _guiAlive then
-                    pcall(function()
-                        inputStroke.Color = Color3.fromRGB(200, 50, 50)
-                    end)
+                    local tType = TOAST_TYPE[reason] or "error"
+                    showToast(msg, nil, tType)
+                    pcall(function() inputStroke.Color = Color3.fromRGB(200, 50, 50) end)
                     task.wait(1.5)
-                    pcall(function()
-                        if _guiAlive then
-                            inputStroke.Color = Color3.fromRGB(55, 60, 110)
-                        end
-                    end)
+                    if _guiAlive then
+                        pcall(function() inputStroke.Color = Color3.fromRGB(55, 60, 110) end)
+                    end
+                else
+                    local tType = TOAST_TYPE[reason] or "error"
+                    showToast(msg, nil, tType)
                 end
             end
         end)
@@ -1326,7 +1316,6 @@ local function startKeyGate(onSuccess)
     local savedData = loadSavedKey()
     if savedData and savedData.key and savedData.key ~= "" then
         pcall(function() input.Text = savedData.key end)
-        -- Hiện thông báo đang tự xác thực
         pcall(function()
             if errLabel and errLabel.Parent then
                 errLabel.Text = "💾 Đang tự xác thực key đã lưu..."
@@ -1334,9 +1323,9 @@ local function startKeyGate(onSuccess)
                 errLabel.BackgroundTransparency = 0.5
             end
         end)
-        -- FIX: Dùng _guiAlive thay vì gui.Parent để check an toàn hơn
+        -- Delay để GUI render xong, sau đó gọi doVerify
         task.delay(0.6, function()
-            if _guiAlive then
+            if _guiAlive and not _verifying then
                 doVerify()
             end
         end)
