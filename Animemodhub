@@ -629,6 +629,53 @@ end
 local _bgCheckActive = false
 local _onKeyInvalidCallback = nil
 
+-- ──────────────────────────────────────────────────────────
+--  HTTP helper — POST JSON body (bypass HoHo Hub key-format hook)
+--  HoHo Hub intercepts GET ?key=... và validate format → KEY_INVALID
+--  Gửi qua POST body thì HoHo Hub không parse → không bị block
+-- ──────────────────────────────────────────────────────────
+local function httpPost(url, payload)
+    local body   = HttpService:JSONEncode(payload)
+    local headers = {
+        ["Content-Type"] = "application/json",
+        ["Accept"]       = "application/json",
+    }
+    -- Thử request() — HoHo Hub, Fluxus, Codex, Delta...
+    if request then
+        local ok, res = pcall(request, {
+            Url     = url,
+            Method  = "POST",
+            Headers = headers,
+            Body    = body,
+        })
+        if ok and res and res.Body then return res.Body end
+    end
+    -- Thử syn.request — Synapse X
+    if syn and syn.request then
+        local ok, res = pcall(syn.request, {
+            Url     = url,
+            Method  = "POST",
+            Headers = headers,
+            Body    = body,
+        })
+        if ok and res and res.Body then return res.Body end
+    end
+    -- Thử http.request — một số executor khác
+    if http and http.request then
+        local ok, res = pcall(http.request, {
+            Url     = url,
+            Method  = "POST",
+            Headers = headers,
+            Body    = body,
+        })
+        if ok and res and res.Body then return res.Body end
+    end
+    -- Fallback: GET (Roblox Studio / executor không hỗ trợ POST body)
+    local getUrl = url .. "?key=" .. HttpService:UrlEncode(tostring(payload.key or ""))
+                       .. "&app=" .. HttpService:UrlEncode(tostring(payload.app  or ""))
+    return game:HttpGet(getUrl)
+end
+
 local function startBackgroundKeyCheck(key, onInvalid)
     if _bgCheckActive then return end
     _bgCheckActive = true
@@ -637,10 +684,11 @@ local function startBackgroundKeyCheck(key, onInvalid)
         while _bgCheckActive do
             task.wait(60) -- kiểm tra mỗi 60 giây
             if not _bgCheckActive then break end
-            local url = SERVER_URL .. "/api/verify?key=" .. HttpService:UrlEncode(key) .. "&app=" .. HttpService:UrlEncode(APP_ID)
             local ok, result = pcall(function()
-                local resp = game:HttpGet(url)
-                return HttpService:JSONDecode(resp)
+                return HttpService:JSONDecode(httpPost(
+                    SERVER_URL .. "/api/verify",
+                    { key = key, app = APP_ID }
+                ))
             end)
             if ok and result then
                 if not result.valid then
@@ -665,10 +713,12 @@ end
 
 -- ──────────────────────────────────────────────────────────
 local function verifyKey(key, callback)
-    local url = SERVER_URL .. "/api/verify?key=" .. HttpService:UrlEncode(key) .. "&app=" .. HttpService:UrlEncode(APP_ID)
+    -- Gửi POST JSON body thay vì GET ?key=... để bypass HoHo Hub key-format hook
     local ok, result = pcall(function()
-        local resp = game:HttpGet(url)
-        return HttpService:JSONDecode(resp)
+        return HttpService:JSONDecode(httpPost(
+            SERVER_URL .. "/api/verify",
+            { key = key, app = APP_ID }
+        ))
     end)
     if ok and result then
         callback(result)
@@ -678,13 +728,39 @@ local function verifyKey(key, callback)
 end
 
 -- ──────────────────────────────────────────────────────────
---  Hiển thị thông báo nổi (toast)
+--  Hiển thị thông báo nổi (toast) — nâng cấp v2: icon + hiệu ứng theo loại
 -- ──────────────────────────────────────────────────────────
-local function showToast(message, color)
-    color = color or Color3.fromRGB(50, 180, 80)
+-- toastType: "success" | "error" | "warning" | "info"  (mặc định "info")
+local function showToast(message, color, toastType)
+    toastType = toastType or "info"
+
+    -- Màu mặc định theo loại nếu không truyền color
+    local defaultColors = {
+        success = Color3.fromRGB(30,  160,  70),
+        error   = Color3.fromRGB(190,  35,  45),
+        warning = Color3.fromRGB(200, 130,   0),
+        info    = Color3.fromRGB(40,  130, 200),
+        banned  = Color3.fromRGB(120,   0, 180),
+        expired = Color3.fromRGB(170,  80,   0),
+    }
+    color = color or defaultColors[toastType] or Color3.fromRGB(50, 180, 80)
+
+    -- Icon theo loại
+    local icons = {
+        success = "✅",
+        error   = "❌",
+        warning = "⚠️",
+        info    = "ℹ️",
+        banned  = "🚫",
+        expired = "⏰",
+    }
+    local icon = icons[toastType] or "🔔"
+
+    -- Huỷ toast cũ
     if LocalPlayer.PlayerGui:FindFirstChild("KeyToastGui") then
         LocalPlayer.PlayerGui:FindFirstChild("KeyToastGui"):Destroy()
     end
+
     local tGui = Instance.new("ScreenGui")
     tGui.Name = "KeyToastGui"
     tGui.ResetOnSpawn = false
@@ -692,37 +768,128 @@ local function showToast(message, color)
     tGui.IgnoreGuiInset = true
     tGui.Parent = LocalPlayer.PlayerGui
 
+    -- Shadow frame (bóng đổ)
+    local shadow = Instance.new("Frame")
+    shadow.Size = UDim2.new(0, 330, 0, 56)
+    shadow.AnchorPoint = Vector2.new(0.5, 0)
+    shadow.Position = UDim2.new(0.5, 3, 0, -65)
+    shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.BackgroundTransparency = 0.55
+    shadow.BorderSizePixel = 0
+    shadow.ZIndex = 19
+    shadow.Parent = tGui
+    Instance.new("UICorner", shadow).CornerRadius = UDim.new(0, 12)
+
+    -- Card chính
     local tFrame = Instance.new("Frame")
-    tFrame.Size = UDim2.new(0, 320, 0, 48)
+    tFrame.Size = UDim2.new(0, 330, 0, 54)
     tFrame.AnchorPoint = Vector2.new(0.5, 0)
-    tFrame.Position = UDim2.new(0.5, 0, 0, -60)
-    tFrame.BackgroundColor3 = color
+    tFrame.Position = UDim2.new(0.5, 0, 0, -65)
+    tFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
     tFrame.BorderSizePixel = 0
     tFrame.ZIndex = 20
     tFrame.Parent = tGui
+    Instance.new("UICorner", tFrame).CornerRadius = UDim.new(0, 12)
 
-    Instance.new("UICorner", tFrame).CornerRadius = UDim.new(0, 10)
+    -- Viền màu theo loại (stroke)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color
+    stroke.Thickness = 2
+    stroke.Transparency = 0
+    stroke.Parent = tFrame
 
+    -- Dải màu bên trái
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(0, 5, 1, -12)
+    bar.Position = UDim2.new(0, 6, 0, 6)
+    bar.BackgroundColor3 = color
+    bar.BorderSizePixel = 0
+    bar.ZIndex = 21
+    bar.Parent = tFrame
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+
+    -- Icon label
+    local tIcon = Instance.new("TextLabel")
+    tIcon.Size = UDim2.new(0, 30, 1, 0)
+    tIcon.Position = UDim2.new(0, 16, 0, 0)
+    tIcon.BackgroundTransparency = 1
+    tIcon.Text = icon
+    tIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tIcon.TextSize = 18
+    tIcon.Font = Enum.Font.GothamBold
+    tIcon.TextXAlignment = Enum.TextXAlignment.Center
+    tIcon.TextYAlignment = Enum.TextYAlignment.Center
+    tIcon.ZIndex = 21
+    tIcon.Parent = tFrame
+
+    -- Message label
     local tLabel = Instance.new("TextLabel")
-    tLabel.Size = UDim2.fromScale(1, 1)
+    tLabel.Size = UDim2.new(1, -58, 1, 0)
+    tLabel.Position = UDim2.new(0, 50, 0, 0)
     tLabel.BackgroundTransparency = 1
     tLabel.Text = message
-    tLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    tLabel.TextSize = 13
+    tLabel.TextColor3 = Color3.fromRGB(230, 230, 240)
+    tLabel.TextSize = 12
     tLabel.Font = Enum.Font.GothamBold
-    tLabel.TextXAlignment = Enum.TextXAlignment.Center
+    tLabel.TextXAlignment = Enum.TextXAlignment.Left
+    tLabel.TextYAlignment = Enum.TextYAlignment.Center
+    tLabel.TextWrapped = true
     tLabel.ZIndex = 21
     tLabel.Parent = tFrame
 
+    -- Hiệu ứng glow nền màu nhạt
+    local glow = Instance.new("Frame")
+    glow.Size = UDim2.fromScale(1, 1)
+    glow.BackgroundColor3 = color
+    glow.BackgroundTransparency = 0.88
+    glow.BorderSizePixel = 0
+    glow.ZIndex = 20
+    glow.Parent = tFrame
+    Instance.new("UICorner", glow).CornerRadius = UDim.new(0, 12)
+
+    -- Progress bar (đếm ngược 3.5s)
+    local pbBg = Instance.new("Frame")
+    pbBg.Size = UDim2.new(1, -20, 0, 2)
+    pbBg.Position = UDim2.new(0, 10, 1, -4)
+    pbBg.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    pbBg.BorderSizePixel = 0
+    pbBg.ZIndex = 22
+    pbBg.Parent = tFrame
+    Instance.new("UICorner", pbBg).CornerRadius = UDim.new(1, 0)
+
+    local pb = Instance.new("Frame")
+    pb.Size = UDim2.fromScale(1, 1)
+    pb.BackgroundColor3 = color
+    pb.BorderSizePixel = 0
+    pb.ZIndex = 23
+    pb.Parent = pbBg
+    Instance.new("UICorner", pb).CornerRadius = UDim.new(1, 0)
+
+    local displayTime = 3.5
+
     -- Slide xuống
     TweenService:Create(tFrame, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5, 0, 0, 18)
+        Position = UDim2.new(0.5, 0, 0, 14)
+    }):Play()
+    TweenService:Create(shadow, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, 3, 0, 17)
     }):Play()
 
-    -- Tự xoá sau 3s
-    task.delay(3, function()
+    -- Thu nhỏ progress bar
+    task.delay(0.35, function()
+        TweenService:Create(pb, TweenInfo.new(displayTime, Enum.EasingStyle.Linear), {
+            Size = UDim2.fromScale(0, 1)
+        }):Play()
+    end)
+
+    -- Tự xoá
+    task.delay(displayTime + 0.35, function()
         TweenService:Create(tFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-            Position = UDim2.new(0.5, 0, 0, -60)
+            Position = UDim2.new(0.5, 0, 0, -65),
+            BackgroundTransparency = 0.5,
+        }):Play()
+        TweenService:Create(shadow, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+            BackgroundTransparency = 1,
         }):Play()
         task.wait(0.35)
         if tGui and tGui.Parent then tGui:Destroy() end
@@ -732,15 +899,30 @@ end
 -- ──────────────────────────────────────────────────────────
 --  Bảng thông báo lỗi
 -- ──────────────────────────────────────────────────────────
+-- ERROR_MESSAGES: tiếng Anh (hiển thị bên trong card và toast)
 local ERROR_MESSAGES = {
-    key_not_found         = "❌ Key không tồn tại.",
-    expired               = "⏰ Key đã hết hạn.",
-    banned                = "🚫 Key đã bị khoá. Liên hệ shop.",
-    device_limit_exceeded = "📵 Vượt quá số thiết bị cho phép.",
-    app_denied            = "⛔ App chưa được cấp phép.",
-    app_pending_approval  = "⏳ App đang chờ duyệt.",
-    rate_limited          = "⚠️ Quá nhiều yêu cầu, thử lại sau.",
-    network_error         = "🌐 Không kết nối được server. Thử lại.",
+    key_not_found         = "Key does not exist.",
+    expired               = "Key has expired.",
+    banned                = "Key has been banned. Contact the shop.",
+    device_limit_exceeded = "Device limit exceeded for this key.",
+    app_denied            = "App is not authorized.",
+    app_pending_approval  = "App is pending approval.",
+    rate_limited          = "Too many requests. Please try again later.",
+    network_error         = "Cannot connect to server. Please try again.",
+    missing_key           = "Please enter your key.",
+}
+
+-- Loại toast tương ứng với từng reason
+local TOAST_TYPE = {
+    key_not_found         = "error",
+    expired               = "expired",
+    banned                = "banned",
+    device_limit_exceeded = "warning",
+    app_denied            = "error",
+    app_pending_approval  = "warning",
+    rate_limited          = "warning",
+    network_error         = "warning",
+    missing_key           = "warning",
 }
 
 -- ──────────────────────────────────────────────────────────
@@ -791,7 +973,7 @@ local function startKeyGate(onSuccess)
         -- Hiện gợi ý
         task.delay(0.3, function()
             if errLabel and errLabel.Parent then
-                errLabel.Text = "💾 Key đã lưu được tự động điền"
+                errLabel.Text = "💾 Saved key auto-filled"
                 errLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
                 errLabel.BackgroundTransparency = 0.5
                 task.delay(2, function()
@@ -829,7 +1011,7 @@ local function startKeyGate(onSuccess)
 
     local function setLoading(loading)
         btn.Active = not loading
-        btnLabel.Text = loading and "⏳  Đang xác thực..." or "⚡  XÁC THỰC KEY  ⚡"
+        btnLabel.Text = loading and "⏳  Verifying..." or "⚡  VERIFY KEY  ⚡"
     end
 
     -- ── Hiệu ứng VIP khi xác thực thành công ──
@@ -883,7 +1065,7 @@ local function startKeyGate(onSuccess)
     local function doVerify()
         local key = input.Text:match("^%s*(.-)%s*$") -- trim
         if key == "" then
-            setError("⚠️ Vui lòng nhập key.")
+            setError("⚠️ Please enter your key.")
             return
         end
 
@@ -949,11 +1131,11 @@ local function startKeyGate(onSuccess)
                     local card = gui:FindFirstChild("Card")
                     if keyType == "PREMIUM" or keyType == "VIP" then
                         -- Hiệu ứng VIP
-                        showToast("👑 KEY PREMIUM! Đang tải script...", Color3.fromRGB(180, 120, 0))
+                        showToast("KEY PREMIUM! Loading script...", Color3.fromRGB(200, 140, 0), "success")
                         if card then playVipSuccessEffect(card) end
                         task.wait(1.2)
                     else
-                        showToast("✅ Key hợp lệ! Đang tải script...", Color3.fromRGB(30, 140, 60))
+                        showToast("Key verified! Loading script...", Color3.fromRGB(30, 140, 60), "success")
                         if card then playNormalSuccessEffect(card) end
                         task.wait(0.8)
                     end
@@ -987,8 +1169,9 @@ local function startKeyGate(onSuccess)
                             pg:FindFirstChild("KeyToastGui"):Destroy()
                         end
                         -- Hiện thông báo
-                        local msg = ERROR_MESSAGES[reason] or "⚠️ Key không còn hợp lệ!"
-                        showToast("🚫 " .. msg .. " Vui lòng đăng nhập lại.", Color3.fromRGB(180, 30, 30))
+                        local msg = ERROR_MESSAGES[reason] or "Key is no longer valid."
+                        local tType = TOAST_TYPE[reason] or "error"
+                        showToast(msg .. " Please log in again.", nil, tType)
                         task.wait(1.5)
                         -- Quay lại màn đăng nhập
                         startKeyGate(onSuccess)
@@ -997,9 +1180,11 @@ local function startKeyGate(onSuccess)
                     onSuccess()
                 else
                     local reason = result.reason or "unknown"
-                    -- Giới hạn thiết bị: nhập key lần 2 trên thiết bị khác sẽ bị chặn
-                    local msg = ERROR_MESSAGES[reason] or ("❌ Key không hợp lệ (" .. reason .. ")")
+                    local msg = ERROR_MESSAGES[reason] or ("❌ Invalid key (" .. reason .. ")")
                     setError(msg)
+                    -- Toast thông báo nổi kèm hiệu ứng theo loại lỗi
+                    local tType = TOAST_TYPE[reason] or "error"
+                    showToast(msg, nil, tType)
                     inputStroke.Color = Color3.fromRGB(200, 50, 50)
                     task.wait(1.5)
                     inputStroke.Color = Color3.fromRGB(55, 60, 110)
@@ -5914,10 +6099,11 @@ end
 local function fetchFreshExpiry(callback)
     if _currentVerifiedKey == "" then callback(0) return end
     task.spawn(function()
-        local url = SERVER_URL .. "/api/verify?key=" .. HttpService:UrlEncode(_currentVerifiedKey) .. "&app=" .. HttpService:UrlEncode(APP_ID)
         local ok, res = pcall(function()
-            local resp = game:HttpGet(url)
-            return HttpService:JSONDecode(resp)
+            return HttpService:JSONDecode(httpPost(
+                SERVER_URL .. "/api/verify",
+                { key = _currentVerifiedKey, app = APP_ID }
+            ))
         end)
         if ok and res and res.valid then
             -- Thử tất cả field có thể có HSD (ưu tiên expiresAt — field chính của server)
