@@ -898,51 +898,42 @@ local function startKeyGate(onSuccess)
                 if result.valid then
                     keyVerified = true
                     _currentVerifiedKey = key
-                    -- Xác định loại key từ server response (fix: đọc đúng field)
+                    -- Xác định loại key từ server response
+                    -- Server trả về field "type" với giá trị lowercase: "premium" / "normal" / null
                     local keyType = "NORMAL"
                     local rawType = ""
-                    if result.keyType then
+                    if result.type then
+                        rawType = tostring(result.type):upper()
+                    elseif result.keyType then
                         rawType = tostring(result.keyType):upper()
                     elseif result.tier then
                         rawType = tostring(result.tier):upper()
-                    elseif result.type then
-                        rawType = tostring(result.type):upper()
                     elseif result.premium or result.isPremium then
                         rawType = "PREMIUM"
                     end
-                    -- Normalize: PREMIUM / PRO / VIP → PREMIUM
-                    if rawType == "PREMIUM" or rawType == "PRO" or rawType == "VIP" or rawType:find("PREMIUM") or rawType:find("PRO") then
+                    if rawType == "PREMIUM" or rawType == "PRO" or rawType == "VIP"
+                       or rawType:find("PREMIUM") or rawType:find("PRO") or rawType:find("VIP") then
                         keyType = "PREMIUM"
-                    elseif rawType ~= "" then
-                        keyType = "NORMAL"
                     end
                     _currentKeyType = keyType
 
-                    -- Lấy expire time (fix: đọc đủ fields + parse cả string datetime)
+                    -- Lấy expire time — server trả về "expiresAt" dạng ISO 8601
+                    -- VD: "2026-07-12T19:36:00.000Z" (UTC), cần parse + bù timezone
                     local expireTime = 0
                     local fieldOrder2 = {
-                        "expireTime","expire_time","expires_at","expire","expiry",
-                        "expiration","hsd","expiresAt","end_time","endTime","expiredAt"
+                        "expiresAt","expireTime","expire_time","expires_at","expire",
+                        "expiry","expiration","hsd","end_time","endTime","expiredAt"
                     }
                     for _, fld in ipairs(fieldOrder2) do
                         local v = result[fld]
-                        if v ~= nil and v ~= "" then
+                        if v ~= nil and v ~= "" and v ~= false then
                             local n = tonumber(v)
                             if n then
                                 if n > 1e12 then n = math.floor(n/1000) end
                                 expireTime = n
                             else
-                                -- Parse string datetime "HH:MM DD/MM/YYYY"
-                                local sv = tostring(v)
-                                local h, m2, d2, mo2, y2 = sv:match("(%d+):(%d+)%s+(%d+)/(%d+)/(%d+)")
-                                if h then
-                                    expireTime = os.time({year=tonumber(y2),month=tonumber(mo2),day=tonumber(d2),hour=tonumber(h),min=tonumber(m2),sec=0})
-                                else
-                                    local d3,mo3,y3,h3,m3 = sv:match("(%d+)/(%d+)/(%d+)%s+(%d+):(%d+)")
-                                    if d3 then
-                                        expireTime = os.time({year=tonumber(y3),month=tonumber(mo3),day=tonumber(d3),hour=tonumber(h3),min=tonumber(m3),sec=0})
-                                    end
-                                end
+                                -- Dùng parseDateTimeString đã hỗ trợ ISO 8601
+                                expireTime = parseDateTimeString(tostring(v))
                             end
                             if expireTime > 0 then break end
                         end
@@ -4945,6 +4936,180 @@ local function CreateAnimeModUILibrary()
         tabPadding.PaddingRight = UDim.new(0, 6)
         tabPadding.Parent = tabList
 
+        -- ─── TOUCH DRAG-TO-SCROLL cho tabList (mobile) ───────────
+        -- ScrollingFrame không auto-scroll trên mobile khi chứa TextButton
+        -- → thêm drag thủ công: vuốt lên/xuống để cuộn menu
+        do
+            local UIS = game:GetService("UserInputService")
+            local _tDragging   = false
+            local _tStartY     = 0
+            local _tStartCanvas = 0
+            local _tLastY      = 0
+            local _tVelocity   = 0
+            local _tLastTime   = 0
+            local _tInertiaConn = nil
+
+            -- Bắt đầu kéo
+            tabList.InputBegan:Connect(function(inp)
+                if inp.UserInputType == Enum.UserInputType.Touch
+                   or inp.UserInputType == Enum.UserInputType.MouseButton1 then
+                    _tDragging    = true
+                    _tStartY      = inp.Position.Y
+                    _tLastY       = inp.Position.Y
+                    _tStartCanvas = tabList.CanvasPosition.Y
+                    _tVelocity    = 0
+                    _tLastTime    = tick()
+                    -- Dừng inertia nếu đang chạy
+                    if _tInertiaConn then _tInertiaConn:Disconnect(); _tInertiaConn = nil end
+                end
+            end)
+
+            -- Kéo đang chạy
+            UIS.InputChanged:Connect(function(inp)
+                if not _tDragging then return end
+                if inp.UserInputType ~= Enum.UserInputType.Touch
+                   and inp.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+
+                local now = tick()
+                local dt  = now - _tLastTime
+                if dt > 0 then
+                    _tVelocity = (inp.Position.Y - _tLastY) / dt
+                end
+                _tLastY    = inp.Position.Y
+                _tLastTime = now
+
+                local delta   = inp.Position.Y - _tStartY
+                local maxScroll = math.max(0, tabList.AbsoluteCanvasSize.Y - tabList.AbsoluteSize.Y)
+                local newY    = math.clamp(_tStartCanvas - delta, 0, maxScroll)
+                tabList.CanvasPosition = Vector2.new(0, newY)
+            end)
+
+            -- Kết thúc kéo → inertia (tiếp tục trôi)
+            UIS.InputEnded:Connect(function(inp)
+                if not _tDragging then return end
+                if inp.UserInputType ~= Enum.UserInputType.Touch
+                   and inp.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+                _tDragging = false
+
+                -- Inertia: trôi dần sau khi buông tay
+                local vel = -_tVelocity  -- đảo chiều: vuốt xuống → canvas đi lên
+                _tInertiaConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+                    if math.abs(vel) < 1 then
+                        if _tInertiaConn then _tInertiaConn:Disconnect(); _tInertiaConn = nil end
+                        return
+                    end
+                    local maxScroll = math.max(0, tabList.AbsoluteCanvasSize.Y - tabList.AbsoluteSize.Y)
+                    local newY = math.clamp(tabList.CanvasPosition.Y + vel * dt * 60, 0, maxScroll)
+                    tabList.CanvasPosition = Vector2.new(0, newY)
+                    vel = vel * 0.88  -- giảm dần (friction)
+                end)
+            end)
+        end
+
+        -- ─── NÚT ▲ / ▼ CUỘN NHANH (nhấn giữ để cuộn liên tục) ──
+        -- Nằm ở góc dưới phải của tabList để tiện bấm 1 tay
+        do
+            local function makeScrollBtn(icon, posY)
+                local btn = Instance.new("TextButton")
+                btn.Size     = UDim2.new(0, 22, 0, 22)
+                btn.Position = UDim2.new(0, 116, 0, posY)  -- cạnh phải tabList
+                btn.BackgroundColor3 = Color3.fromRGB(60, 35, 140)
+                btn.BackgroundTransparency = 0.25
+                btn.Text     = icon
+                btn.TextSize = 13
+                btn.Font     = Enum.Font.GothamBold
+                btn.TextColor3 = Color3.fromRGB(220, 200, 255)
+                btn.ZIndex   = 8
+                btn.Parent   = tabList
+                addCorner(btn, 6)
+                addStroke(btn, Color3.fromRGB(100, 60, 220), 1)
+
+                -- Hiệu ứng nhấn
+                btn.MouseButton1Down:Connect(function()
+                    TweenService:Create(btn, TweenInfo.new(0.1), {
+                        BackgroundColor3 = Color3.fromRGB(100, 60, 200)
+                    }):Play()
+                end)
+                btn.MouseButton1Up:Connect(function()
+                    TweenService:Create(btn, TweenInfo.new(0.1), {
+                        BackgroundColor3 = Color3.fromRGB(60, 35, 140)
+                    }):Play()
+                end)
+                return btn
+            end
+
+            local SCROLL_STEP = 80   -- px mỗi lần nhấn
+            local HOLD_DELAY  = 0.35 -- giây trước khi bắt đầu cuộn liên tục
+            local HOLD_RATE   = 0.06 -- giây giữa mỗi bước cuộn khi giữ
+
+            local function applyScroll(dir)
+                local maxScroll = math.max(0, tabList.AbsoluteCanvasSize.Y - tabList.AbsoluteSize.Y)
+                local newY = math.clamp(tabList.CanvasPosition.Y + dir * SCROLL_STEP, 0, maxScroll)
+                TweenService:Create(tabList, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    CanvasPosition = Vector2.new(0, newY)
+                }):Play()
+            end
+
+            local function attachHold(btn, dir)
+                local holding = false
+                btn.MouseButton1Down:Connect(function()
+                    holding = true
+                    applyScroll(dir)  -- bước đầu ngay lập tức
+                    task.delay(HOLD_DELAY, function()
+                        while holding and btn and btn.Parent do
+                            applyScroll(dir)
+                            task.wait(HOLD_RATE)
+                        end
+                    end)
+                end)
+                btn.MouseButton1Up:Connect(function() holding = false end)
+                btn.MouseLeave:Connect(function() holding = false end)
+            end
+
+            -- Tạo nút ▲ và ▼ — đặt trong tabList nhưng dùng SizeConstraint để luôn
+            -- nổi ở đáy frame (Position tương đối so với tabList, sẽ cuộn theo canvas
+            -- → không sao vì ta dùng ZIndex cao và overlay transparent lên)
+            -- Cách đơn giản hơn: đặt ngoài tabList, trong main
+            local upBtn  = Instance.new("TextButton")
+            local dnBtn  = Instance.new("TextButton")
+
+            for i, t in ipairs({
+                {upBtn,  "▲", UDim2.new(0, 6,   0, 48 + 4)},
+                {dnBtn,  "▼", UDim2.new(0, 6,   1, -28)},
+            }) do
+                local b, ico, pos = t[1], t[2], t[3]
+                b.Size     = UDim2.new(0, 133, 0, 20)
+                b.Position = pos
+                b.BackgroundColor3 = Color3.fromRGB(30, 20, 70)
+                b.BackgroundTransparency = 0.15
+                b.Text     = ico .. "  Cuộn " .. (i==1 and "lên" or "xuống")
+                b.TextSize = 10
+                b.Font     = Enum.Font.GothamSemibold
+                b.TextColor3 = Color3.fromRGB(180, 160, 255)
+                b.ZIndex   = 9
+                b.Parent   = main
+                addCorner(b, 5)
+                addStroke(b, Color3.fromRGB(80, 50, 160), 1)
+
+                -- Hover
+                b.MouseEnter:Connect(function()
+                    TweenService:Create(b, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(60, 40, 130)}):Play()
+                end)
+                b.MouseLeave:Connect(function()
+                    TweenService:Create(b, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(30, 20, 70)}):Play()
+                end)
+            end
+
+            attachHold(upBtn, -1)
+            attachHold(dnBtn,  1)
+
+            -- Ẩn/hiện nút theo trạng thái minimize
+            local _origMinimize = window.Minimize
+            -- Sẽ patch sau khi window.Minimize được định nghĩa (xem bên dưới)
+            -- Lưu ref để patch
+            rawset(window, "_scrollBtns", {upBtn, dnBtn})
+        end
+
         -- ─── PAGES ───────────────────────────────────────────────
         local pages = Instance.new("Frame")
         pages.Name = "Pages"
@@ -5089,6 +5254,13 @@ local function CreateAnimeModUILibrary()
             pages.Visible = not self.Minimized
             resizeHandle.Visible = not self.Minimized
             minimizeButton.Text = self.Minimized and "+" or "—"
+            -- Ẩn/hiện nút cuộn ▲▼ cùng với tabList
+            local btns = rawget(self, "_scrollBtns")
+            if btns then
+                for _, b in ipairs(btns) do
+                    b.Visible = not self.Minimized
+                end
+            end
         end
 
         minimizeButton.MouseButton1Click:Connect(function()
@@ -5695,26 +5867,39 @@ local hsdParagraph = v484:AddParagraph({
     Content = "Đang tải thông tin key..."
 })
 
--- ── Parse datetime string từ server: "HH:MM DD/MM/YYYY" hoặc "DD/MM/YYYY HH:MM" ──
+-- ── Parse datetime string từ server ──
+-- Hỗ trợ: ISO 8601 ("2026-07-12T19:36:00.000Z"), "HH:MM DD/MM/YYYY", "DD/MM/YYYY HH:MM", Unix ts
 local function parseDateTimeString(s)
     if not s then return 0 end
     s = tostring(s)
+
+    -- Format 0 (QUAN TRỌNG): ISO 8601 — đây là format server thực tế trả về
+    -- VD: "2026-07-12T19:36:00.000Z" hoặc "2026-07-12T19:36:00Z"
+    local y0, mo0, d0, h0, m0, sec0 = s:match("(%d%d%d%d)-(%d%d)-(%d%d)T(%d%d):(%d%d):(%d%d)")
+    if y0 then
+        -- Server lưu UTC, os.time() dùng local time → cộng thêm UTC offset của máy
+        -- Cách an toàn: tính bằng số giây thủ công
+        local t = os.time({year=tonumber(y0), month=tonumber(mo0), day=tonumber(d0),
+                           hour=tonumber(h0), min=tonumber(m0), sec=tonumber(sec0 or 0)})
+        -- Bù offset UTC→Local: os.time() interpret theo localtime, nhưng input là UTC
+        -- Tính offset = os.time() của cùng struct so với os.time(os.date("*t"))
+        local utcNow = os.time(os.date("!*t"))  -- UTC now
+        local localNow = os.time()               -- local now
+        local offsetSec = localNow - utcNow      -- offset (VN = +25200)
+        return t + offsetSec
+    end
+
     -- Format 1: "19:36 12/07/2026"  (HH:MM DD/MM/YYYY)
     local h, m, d, mo, y = s:match("(%d+):(%d+)%s+(%d+)/(%d+)/(%d+)")
     if h then
-        -- os.time với UTC: tính offset thủ công (+7 VN)
-        local utcOffset = 7 * 3600  -- Vietnam UTC+7
-        local t = os.time({year=tonumber(y), month=tonumber(mo), day=tonumber(d),
-                           hour=tonumber(h), min=tonumber(m), sec=0})
-        -- os.time trả về local time, trừ offset để ra UTC nếu cần
-        return t
+        return os.time({year=tonumber(y), month=tonumber(mo), day=tonumber(d),
+                        hour=tonumber(h), min=tonumber(m), sec=0})
     end
     -- Format 2: "12/07/2026 19:36"
     local d2, mo2, y2, h2, m2 = s:match("(%d+)/(%d+)/(%d+)%s+(%d+):(%d+)")
     if d2 then
-        local t = os.time({year=tonumber(y2), month=tonumber(mo2), day=tonumber(d2),
-                           hour=tonumber(h2), min=tonumber(m2), sec=0})
-        return t
+        return os.time({year=tonumber(y2), month=tonumber(mo2), day=tonumber(d2),
+                        hour=tonumber(h2), min=tonumber(m2), sec=0})
     end
     -- Format 3: số thuần (Unix timestamp)
     local n = tonumber(s)
@@ -5735,29 +5920,36 @@ local function fetchFreshExpiry(callback)
             return HttpService:JSONDecode(resp)
         end)
         if ok and res and res.valid then
-            -- Thử tất cả field có thể có HSD
+            -- Thử tất cả field có thể có HSD (ưu tiên expiresAt — field chính của server)
             local expireTime = 0
             local fieldOrder = {
-                "expireTime","expire_time","expires_at","expire","expiry",
-                "expiration","hsd","expiresAt","end_time","endTime","expiredAt"
+                "expiresAt","expireTime","expire_time","expires_at","expire",
+                "expiry","expiration","hsd","end_time","endTime","expiredAt"
             }
             for _, field in ipairs(fieldOrder) do
                 local v = res[field]
-                if v ~= nil and v ~= "" then
+                if v ~= nil and v ~= "" and v ~= false then
                     local n = tonumber(v)
                     if n then
-                        -- Số: Unix timestamp
                         if n > 1e12 then n = math.floor(n/1000) end
                         expireTime = n
                     else
-                        -- String datetime
-                        expireTime = parseDateTimeString(v)
+                        expireTime = parseDateTimeString(tostring(v))
                     end
                     if expireTime > 0 then break end
                 end
             end
-            -- Cũng cập nhật biến global
+            -- Cập nhật biến global nếu lấy được
             if expireTime > 0 then _currentExpireTime = expireTime end
+            -- Cập nhật keyType từ server nếu có (type lowercase: "premium"/"normal")
+            if res.type and res.type ~= "" then
+                local rt = tostring(res.type):upper()
+                if rt == "PREMIUM" or rt == "PRO" or rt == "VIP" then
+                    _currentKeyType = "PREMIUM"
+                else
+                    _currentKeyType = "NORMAL"
+                end
+            end
             callback(expireTime)
         else
             callback(_currentExpireTime)
@@ -5815,21 +6007,51 @@ local function buildHSDText()
     return keyDisplay .. "\nLoại key: " .. typeIcon .. "\n" .. hsdText .. "\n\n• Key hết hạn sẽ tự động đăng xuất\n• Mỗi key giới hạn 1 thiết bị"
 end
 
--- Cập nhật ngay lập tức
+-- Cập nhật ngay lập tức (hiện trạng thái ban đầu)
 pcall(function() hsdParagraph:Set(buildHSDText()) end)
 
--- Fetch fresh từ server để đảm bảo HSD đúng
-fetchFreshExpiry(function(freshTime)
-    if freshTime > 0 then
-        _currentExpireTime = freshTime
+-- Fetch fresh từ server ngay khi load, retry tối đa 3 lần nếu server chậm (Render free)
+task.spawn(function()
+    local maxRetry = 3
+    for attempt = 1, maxRetry do
+        -- Hiện trạng đang fetch nếu chưa có dữ liệu
+        if _currentExpireTime == 0 then
+            pcall(function()
+                local keyDisp = _currentVerifiedKey ~= "" and ("Key: " .. string.sub(_currentVerifiedKey,1,12) .. "****") or "Key: Chưa đăng nhập"
+                local typeDisp = (_currentKeyType == "PREMIUM" or _currentKeyType == "VIP") and "👑 PREMIUM" or "🔰 THƯỜNG"
+                hsdParagraph:Set(keyDisp .. "\nLoại key: " .. typeDisp .. "\nHSD: ⏳ Đang lấy thông tin... (" .. attempt .. "/" .. maxRetry .. ")\n\n• Key hết hạn sẽ tự động đăng xuất\n• Mỗi key giới hạn 1 thiết bị")
+            end)
+        end
+
+        fetchFreshExpiry(function(freshTime)
+            if freshTime > 0 then _currentExpireTime = freshTime end
+            pcall(function() hsdParagraph:Set(buildHSDText()) end)
+        end)
+
+        task.wait(3 + attempt)  -- chờ async fetch xong: 4s, 5s, 6s
+        if _currentExpireTime > 0 then break end
+
+        if attempt == maxRetry and _currentExpireTime == 0 then
+            pcall(function()
+                local keyDisp = _currentVerifiedKey ~= "" and ("Key: " .. string.sub(_currentVerifiedKey,1,12) .. "****") or "Key: Chưa đăng nhập"
+                local typeDisp = (_currentKeyType == "PREMIUM" or _currentKeyType == "VIP") and "👑 PREMIUM" or "🔰 THƯỜNG"
+                hsdParagraph:Set(keyDisp .. "\nLoại key: " .. typeDisp .. "\nHSD: ⚠️ Không lấy được — lỗi kết nối server\n\n• Key hết hạn sẽ tự động đăng xuất\n• Mỗi key giới hạn 1 thiết bị")
+            end)
+        end
     end
-    pcall(function() hsdParagraph:Set(buildHSDText()) end)
 end)
 
--- Cập nhật HSD mỗi 30 giây (đếm ngược realtime)
+-- Đếm ngược realtime mỗi 10 giây, auto retry fetch nếu HSD vẫn chưa có
 task.spawn(function()
-    while task.wait(30) do
-        pcall(function() hsdParagraph:Set(buildHSDText()) end)
+    while task.wait(10) do
+        if _currentExpireTime > 0 then
+            pcall(function() hsdParagraph:Set(buildHSDText()) end)
+        else
+            fetchFreshExpiry(function(freshTime)
+                if freshTime > 0 then _currentExpireTime = freshTime end
+                pcall(function() hsdParagraph:Set(buildHSDText()) end)
+            end)
+        end
     end
 end)
 
