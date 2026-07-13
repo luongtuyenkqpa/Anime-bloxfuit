@@ -1,0 +1,6 @@
+local BaseUrl = "https://raw.githubusercontent.com/luongtuyenkqpa/Anime-bloxfuit/refs/heads/main/"
+if game.PlaceId == 6516141723 then
+    loadstring(game:HttpGet(BaseUrl .. "Lobby_luau_vi"))()
+else
+    loadstring(game:HttpGet(BaseUrl .. "Main_luau_vi"))()
+end
