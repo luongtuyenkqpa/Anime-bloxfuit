@@ -1,0 +1,698 @@
+local LoadStart = tick()
+
+-- ── FIX GUARD: Chặn hiện menu 2 lần ──────────────────────────
+if getgenv().AnimeModHub_Lobby_Loaded then
+    warn("[Lobby] Menu đã được load rồi — bỏ qua!")
+    return
+end
+getgenv().AnimeModHub_Lobby_Loaded = true
+
+
+-- ── FIX: Guard Abysall nil — chờ tối đa 20s nếu chưa ready ──
+if not getgenv().Abysall then
+    warn("[Lobby] Abysall chưa sẵn sàng, đang chờ...")
+    local _t0 = tick()
+    while not getgenv().Abysall do
+        if tick() - _t0 > 20 then
+            warn("[Lobby] TIMEOUT chờ Abysall — không thể khởi động Lobby menu!")
+            return
+        end
+        task.wait(0.1)
+    end
+end
+
+Abysall.SavePath = "Doors/Lobby"
+
+local Library = Abysall.Interface.Library
+local SaveManager = Abysall.Interface.SaveManager
+local ThemeManager = Abysall.Interface.ThemeManager
+
+local Toggles = Library.Toggles
+local Options = Library.Options
+
+local function NhanBanThamChieu(Object)
+    if Abysall and Abysall.Environment.cloneref then
+        return Abysall.Environment.cloneref(Object)
+    else
+        return Object
+    end
+end
+
+local Services = setmetatable({}, {
+    __index = function(self, Name)
+        return NhanBanThamChieu(game:GetService(Name))
+    end
+})
+
+local Groupboxes = {}
+local Globals = {}
+local Connections = {}
+local Functions = {}
+
+local LocalPlayer = Services.Players.LocalPlayer
+-- FIX: Thêm timeout 30s tránh treo vô hạn nếu RemotesFolder chưa replicate
+local RemotesFolder = Services.ReplicatedStorage:WaitForChild("RemotesFolder", 30)
+if not RemotesFolder then
+    warn("[Lobby] RemotesFolder không tồn tại sau 30s — Lobby menu không thể khởi động!")
+    return
+end
+
+while not LocalPlayer.Character do
+    task.wait()
+end
+task.wait(1)
+
+local Window = Library:CreateWindow({
+    Title = "Abysall Hub",
+    Footer = "dsc.gg/abysallhub",
+    NotifySide = "Right",
+    ShowCustomCursor = false,
+    AutoShow = true,
+    Center = true,
+	TabPadding = 3,
+	MenuFadeTime = 0,
+    CornerRadius = 2,
+})
+
+-- ── Tab Thông tin (Info) tùy chỉnh có HSD key ──
+do
+    local InfoTab = Window:AddTab("Thông tin", "user")
+    local InfoLeft = InfoTab:AddLeftGroupbox("Thông tin người dùng")
+    local InfoRight = InfoTab:AddRightGroupbox("Nhật ký thay đổi")
+
+    -- Hiển thị avatar / tên nhân vật
+    InfoLeft:AddLabel(LocalPlayer.DisplayName .. " (@" .. LocalPlayer.Name .. ")")
+    InfoLeft:AddDivider()
+
+    -- Thông tin key
+    local keyLine = "Key: Chưa đăng nhập"
+    local typeLine = "Loại: —"
+    local hsdLine  = "Hạn sử dụng: —"
+
+    -- Cố lấy thông tin từ global của Animemodhub
+    pcall(function()
+        local vk  = getgenv()._amh_currentKey      or ""
+        local vkt = getgenv()._amh_currentKeyType   or "NORMAL"
+        local vet = getgenv()._amh_currentExpireTime or 0
+
+        if vk ~= "" then
+            keyLine = "Key: " .. string.sub(vk, 1, 10) .. "****"
+            if vkt == "PREMIUM" or vkt == "VIP" or vkt == "PRO" then
+                typeLine = "Loại: 👑 PREMIUM"
+            else
+                typeLine = "Loại: 🔰 THƯỜNG"
+            end
+
+            if vet and vet > 0 then
+                local now  = os.time()
+                local diff = vet - now
+                if diff <= 0 then
+                    hsdLine = "Hạn sử dụng: ⛔ ĐÃ HẾT HẠN"
+                else
+                    local days  = math.floor(diff / 86400)
+                    local hours = math.floor((diff % 86400) / 3600)
+                    local mins  = math.floor((diff % 3600) / 60)
+                    if days > 0 then
+                        hsdLine = string.format("Hạn sử dụng: Còn %d ngày %d giờ %d phút", days, hours, mins)
+                    elseif hours > 0 then
+                        hsdLine = string.format("Hạn sử dụng: Còn %d giờ %d phút", hours, mins)
+                    else
+                        hsdLine = string.format("Hạn sử dụng: Còn %d phút", mins)
+                    end
+                end
+            else
+                hsdLine = "Hạn sử dụng: Vĩnh viễn / Không rõ"
+            end
+        end
+    end)
+
+    InfoLeft:AddLabel(keyLine)
+    InfoLeft:AddLabel(typeLine)
+    InfoLeft:AddLabel(hsdLine)
+
+    -- Nhật ký thay đổi (bên phải)
+    InfoRight:AddLabel("11/7/2026")
+    InfoRight:AddLabel("+ Đã thêm Chọn ESP Thực thể")
+    InfoRight:AddLabel("+ Đã thêm Thông báo Vật phẩm")
+    InfoRight:AddLabel("+ Đã thêm Xóa Surge")
+    InfoRight:AddLabel("+ Đã thêm Nông trại Cái chết")
+    InfoRight:AddLabel("+ Đã sửa một số tính năng bị lỗi (Bỏ qua Eyes, v.v.)")
+end
+
+local Tabs = {
+    General = Window:AddTab("Tổng quát", "house"),
+}
+
+Functions.KiemTraTuongThich = function(Array)
+    local Valid = true
+    for Index, Name in pairs(Array) do
+        if not Abysall.Environment[Name] then
+            Valid = false
+        end
+    end
+    return Valid
+end
+
+local function LayKhungAnDanh()
+	if Functions.KiemTraTuongThich({"gethui"}) then
+		return Abysall.Environment.gethui()
+	else
+		return Services.CoreGui
+	end
+end
+
+local NotificationLibrary = {
+	LiveNotifications = 0,
+    Notifications = 1
+}
+
+local Container = Instance.new("ScreenGui")
+Container.Name = Abysall.ESPLibrary:GenerateRandomString()
+Container.Parent = LayKhungAnDanh()
+Container.DisplayOrder = 32767
+Container.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+if not Library.Scheme then
+    Library.Scheme = setmetatable({}, {
+        __index = function(self, Name)
+            return Library[Name]
+        end
+    })
+end
+
+function NotificationLibrary:ThongBao(TitleText, Desc, Delay)
+	task.spawn(function()
+		local Notification = Instance.new("Frame")
+		local Line = Instance.new("Frame")
+		local Warning = Instance.new("ImageLabel")
+		local UICorner = Instance.new("UICorner")
+        local UICorner2 = Instance.new("UICorner")
+		local Title = Instance.new("TextLabel")
+		local Description = Instance.new("TextLabel")
+
+		Notification.Name = "Notification"
+		Notification.Parent = Container
+		Notification.BackgroundColor3 = Library.Scheme.BackgroundColor
+		Notification.BackgroundTransparency = 0.4
+		Notification.BorderSizePixel = 0
+		Notification.Position = UDim2.new(1, 5, 0, 60 + (60 * NotificationLibrary.LiveNotifications))
+		Notification.Size = UDim2.new(0, 420, 0, 50)
+        Notification:SetAttribute("ID", NotificationLibrary.Notifications)
+        Notification:SetAttribute("CurrentPosition", Notification.Position)
+
+		Line.Name = "Line"
+		Line.Parent = Notification
+		Line.BackgroundColor3 = Library.Scheme.AccentColor
+		Line.BorderSizePixel = 0
+		Line.Position = UDim2.new(0, 0, 1, -3)
+		Line.Size = UDim2.new(0, 0, 0, 3)
+
+		Warning.Name = "Warning"
+		Warning.Parent = Notification
+		Warning.BackgroundTransparency = 1
+		Warning.Position = UDim2.new(0, 10, 0, 5)
+		Warning.Size = UDim2.new(0, 40, 0, 40)
+		Warning.Image = "rbxassetid://3944668821"
+		Warning.ImageColor3 = Library.Scheme.AccentColor
+		Warning.ScaleType = Enum.ScaleType.Fit
+
+		UICorner.CornerRadius = UDim.new(0, 20)
+		UICorner.Parent = Warning
+
+        UICorner2.CornerRadius = UDim.new(0, 4)
+        UICorner2.Parent = Notification
+
+		Title.Name = "Title"
+		Title.Parent = Notification
+		Title.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		Title.BackgroundTransparency = 1.000
+		Title.Position = UDim2.new(0, 60, 0.155, 0)
+		Title.Size = UDim2.new(0, 205, 0, 15)
+		Title.Text = TitleText or "..."
+		Title.TextColor3 = Library.Scheme.FontColor
+		Title.TextSize = 10
+		Title.TextStrokeTransparency = 0.75
+		Title.TextXAlignment = Enum.TextXAlignment.Left
+
+		Description.Name = "Description"
+		Description.Parent = Notification
+		Description.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+		Description.BackgroundTransparency = 1.000
+		Description.Position = UDim2.new(0, 60, 0.483, 0)
+		Description.Size = UDim2.new(0, 205, 0, 18)
+		Description.Text = Desc or "..."
+		Description.TextColor3 = Library.Scheme.FontColor
+        Description.TextTransparency = 0.1
+		Description.TextSize = 10
+		Description.TextStrokeTransparency = 0.75
+		Description.TextXAlignment = Enum.TextXAlignment.Left
+		
+		NotificationLibrary.LiveNotifications = NotificationLibrary.LiveNotifications + 1
+        NotificationLibrary.Notifications = NotificationLibrary.Notifications + 1
+		Services.TweenService:Create(Notification, TweenInfo.new(1, Enum.EasingStyle.Exponential), {Position = UDim2.new(1, -370, 0, Notification.Position.Y.Offset)}):Play()
+
+		task.wait(0.25)
+		Services.TweenService:Create(Line, TweenInfo.new(Delay - 0.25, Enum.EasingStyle.Linear), {Size = UDim2.new(0, 400, 0, 3)}):Play()
+		task.wait(Delay - 0.25)
+
+        Notification:SetAttribute("Destroying", true)
+		Services.TweenService:Create(Notification, TweenInfo.new(0.75, Enum.EasingStyle.Exponential, Enum.EasingDirection.In), {Position = UDim2.new(1, 5, 0, Notification.Position.Y.Offset)}):Play()
+		NotificationLibrary.LiveNotifications = NotificationLibrary.LiveNotifications - 1
+        
+        for Index, Object in pairs(Container:GetChildren()) do
+            if Object.Name == "Notification" and Object:GetAttribute("ID") and Object:GetAttribute("ID") > Notification:GetAttribute("ID") and Object:GetAttribute("Destroying") ~= true and Object.Position.Y.Offset ~= 60 then
+                Object:SetAttribute("CurrentPosition", UDim2.new(1, -450, 0, Object:GetAttribute("CurrentPosition").Y.Offset - 60))
+                Services.TweenService:Create(Object, TweenInfo.new(1, Enum.EasingStyle.Exponential, Enum.EasingDirection.InOut), {Position = UDim2.new(1, -370, 0, Object:GetAttribute("CurrentPosition").Y.Offset)}):Play()
+            end
+        end
+        task.wait(0.75)
+		Notification:Destroy()
+	end)
+end
+
+Functions.GuiThongBao = function(Settings)
+    local Container
+    if Functions.KiemTraTuongThich({"gethui"}) then
+        Container = Abysall.Environment.gethui()
+    else
+        Container = Services.CoreGui
+    end
+
+    local Sound = Instance.new("Sound", Container)
+    Sound.SoundId = "rbxassetid://8784885431"
+    Sound.Volume = 3
+    Sound.PlayOnRemove = true
+    Sound:Destroy()
+
+    NotificationLibrary:ThongBao(Settings.Title, Settings.Body, Settings.Time or 5)
+end
+
+Library.ThongBaoLib = function(Data, Body, Time)
+    Functions.GuiThongBao({Title = Body, Time = Time or 5})
+end
+
+Functions.KiemTraThangMay = function()
+    local TargetFound = false
+	if not Toggles.AutoJoinElevator.Value then
+		return
+	end
+	local TargetCharacter
+	if typeof(Options.AutoJoinElevatorTarget.Value) == "Instance" then
+		TargetCharacter = Options.AutoJoinElevatorTarget.Value.Character
+	elseif typeof(Options.AutoJoinElevatorTarget.Value) == "string" then
+		TargetCharacter = Services.Players:FindFirstChild(Options.AutoJoinElevatorTarget.Value).Character
+	end
+
+	for Index, Elevator in pairs(Services.Workspace.Lobby.LobbyElevators:GetChildren()) do
+		if TargetCharacter and Elevator and TargetCharacter:GetAttribute("InGameElevator") and Elevator:GetAttribute("ID") and Elevator:GetAttribute("ID") == TargetCharacter:GetAttribute("InGameElevator") then
+			TargetFound = true
+			RemotesFolder.ElevatorJoin:FireServer(Elevator)
+        end
+    end
+	if TargetFound == false then
+		RemotesFolder.ElevatorExit:FireServer()
+	end
+end
+
+Globals.RedeemingCodes = false
+Globals.CodesList = {
+    "67",
+	"54",
+	"41",
+	"CHEDDAR BALLS",
+	"XQC",
+	"PENGUINZ0",
+	"KREEKCRAFT",
+	"ISHOWSPEED",
+	"DANTDM",
+	"KUBZ SCOUTS",
+	"FIND THE TROLLFACES",
+	"THINKNOODLES",
+	"W",
+	"RAGDOLL UNIVERSE",
+	"RAGDOLL MAYHEM",
+	"BIJUU MIKE",
+	"8BITRYAN",
+	"SCREECHSUCKS",
+	"LORE",
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+	"FIND THE TROLLFACES",
+	"3rd",
+	"LAZYDEVS",
+	"RAGDOLL COMBAT",
+	"VOCAB HAVOC",
+	"PATHSWAP",
+	"JUMP OVER THE BRICK"
+}
+Globals.UnlockedBadges = {}
+
+Groupboxes.General_Self = Tabs.General:AddLeftGroupbox("Bản thân")
+
+Groupboxes.General_Self:AddToggle("AutoJoinElevator", {
+    Text = "Tự động vào thang máy",
+    Default = false,
+    Tooltip = "Tự động vào thang máy của người chơi đã chọn."
+})
+
+Groupboxes.General_Self:AddDropdown("AutoJoinElevatorTarget", {
+    Text = "Mục tiêu",
+    SpecialType = "Player",
+    ExcludeLocalPlayer = true,
+    Searchable = true
+})
+
+Groupboxes.General_Automation = Tabs.General:AddLeftGroupbox("Tự động hóa")
+
+Groupboxes.General_Automation:AddToggle("CycleAchievements", {
+    Text = "Xoay vòng thành tích",
+    Default = false,
+    Tooltip = "Nhanh chóng trang bị huy hiệu ngẫu nhiên."
+})
+
+Groupboxes.General_Automation:AddSlider("CycleAchievementsDelay", {
+    Text = "Độ trễ xoay vòng",
+    Min = 0,
+    Max = 1,
+    Default = 0.1,
+    Rounding = 2,
+    Compact = true
+})
+
+Groupboxes.General_Automation:AddDivider()
+
+Groupboxes.General_Automation:AddButton("Nhận tất cả mã", function()
+    if Globals.RedeemingCodes then
+        return
+    end
+
+    Functions.GuiThongBao({Title = "Đang nhận " .. #Globals.CodesList .. " mã.", Body = "Vui lòng chờ."})
+    Globals.RedeemingCodes = true
+    for Index, Code in pairs(Globals.CodesList) do
+        RemotesFolder.ShopCode:FireServer(Code)
+        task.wait(5.1)
+    end
+end)
+
+for Index, Frame in pairs(LocalPlayer.PlayerGui.MainUI.LobbyFrame.Achievements.List:GetChildren()) do
+	if Frame:IsA("ImageButton") and Frame.ImageTransparency == 0 then
+		table.insert(Globals.UnlockedBadges, Frame.Name)
+	end
+end
+
+Connections.BadgeAddedConnection = LocalPlayer.PlayerGui.MainUI.LobbyFrame.Achievements.List.ChildAdded:Connect(function(Frame)
+	Services.RunService.Heartbeat:Wait()
+	if Frame:IsA("ImageButton") and Frame.ImageTransparency == 0 then
+		table.insert(Globals.UnlockedBadges, Frame.Name)
+	end
+end)
+
+Globals.LastBadgeChange = tick()
+Globals.LastElevatorCheck = tick()
+Connections.MainConnection = Services.RunService.Heartbeat:Connect(function()
+	if tick() - Globals.LastElevatorCheck > 0.25 then
+    	Functions.KiemTraThangMay()
+		Globals.LastElevatorCheck = tick()
+	end
+
+    if Toggles.CycleAchievements.Value and tick() - Globals.LastBadgeChange > Options.CycleAchievementsDelay.Value then
+        local Badge = Globals.UnlockedBadges[math.random(1, #Globals.UnlockedBadges)]
+        if Badge == PreviousBadge then
+            while task.wait() do
+				local NewBadge = Globals.UnlockedBadges[math.random(1, #Globals.UnlockedBadges)]
+				if NewBadge ~= PreviousBadge then
+					Badge = NewBadge
+					break
+				end
+			end
+		end
+		for Index, Frame in pairs(LocalPlayer.PlayerGui.MainUI.LobbyFrame.Achievements.List:GetChildren()) do
+			if Frame:IsA("ImageButton") and Frame.ImageTransparency == 0 then
+				LocalPlayer.PlayerGui.MainUI.LobbyFrame.Achievements.List:FindFirstChild(Frame.Name).Icons.Star.Visible = false
+			end
+		end
+		RemotesFolder:WaitForChild("FlexAchievement"):FireServer(Badge)
+		PreviousBadge = Badge
+		LocalPlayer.PlayerGui.MainUI.LobbyFrame.Achievements.List:FindFirstChild(Badge).Icons.Star.Visible = true
+
+        Globals.LastBadgeChange = tick()
+	end
+end)
+
+Groupboxes.General_QuickPlay = Tabs.General:AddRightGroupbox("Chơi nhanh")
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Khách sạn",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "Hotel",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Mỏ",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "Mines",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Cửa hậu",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "Backdoor",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Các phòng",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "Rooms",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Ngoại ô",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "Garden",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddDivider()
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Chế độ chiến đấu",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "Party",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Chế độ cổ điển",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "Retro",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Chế độ vội vàng",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "Fools26",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddDivider()
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Halloween",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "Halloween25",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Khách sạn-",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "BeforePlus",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Chế độ siêu khó",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {},
+        	Settings = {},
+        	Destination = "SuperHardMode",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddDivider()
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Các phòng [Miễn phí, Không lưu tiến trình]",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {
+				"AdminPanel"
+			},
+        	Settings = {},
+        	Destination = "Rooms",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Groupboxes.General_QuickPlay:AddButton({
+	Text = "Ngoại ô [Miễn phí, Không lưu tiến trình]",
+	DoubleClick = false,
+	Func = function()
+		RemotesFolder.CreateElevator:FireServer({
+        	Mods = {
+				"AdminPanel"
+			},
+        	Settings = {},
+        	Destination = "Garden",
+        	FriendsOnly = false,
+        	MaxPlayers = "1"
+    	})
+	end
+})
+
+Library:OnUnload(function()
+    Connections.MainConnection:Disconnect()
+	getgenv().Abysall = nil
+	getgenv().AnimeModHub_Lobby_Loaded = nil
+end)
+
+-- ── Tab Cài đặt tùy chỉnh (Settings) bằng tiếng Việt ──
+do
+    local SettingsTab = Window:AddTab("Cài đặt", "settings")
+    local MenuGroup = SettingsTab:AddLeftGroupbox("Trình đơn")
+
+    MenuGroup:AddToggle("OpenKeybindMenu_Lobby", {
+        Text = "Mở trình đơn phím tắt",
+        Default = false,
+    })
+    MenuGroup:AddToggle("CustomCursor_Lobby", {
+        Text = "Con trỏ tùy chỉnh",
+        Default = false,
+    })
+
+    MenuGroup:AddLabel("Giao diện")
+    MenuGroup:AddDropdown("UIStyle_Lobby", {
+        Text = "Phong cách giao diện",
+        Values = {"Obsidian", "Classic", "Default"},
+        Default = 1,
+    })
+    MenuGroup:AddDropdown("DPIScale_Lobby", {
+        Text = "Tỉ lệ DPI",
+        Values = {"75%", "100%", "125%", "150%"},
+        Default = 2,
+    })
+
+    -- Phím mở menu
+    MenuGroup:AddLabel("Phím mở trình đơn")
+    MenuGroup:AddKeybind("MenuKeybind_Lobby", {
+        Text = "Phím mở/đóng",
+        Default = "RightShift",
+    })
+
+    local ConfigGroup = SettingsTab:AddRightGroupbox("Cấu hình")
+    ConfigGroup:AddLabel("Tên cấu hình")
+    ConfigGroup:AddInput("ConfigName_Lobby", {
+        Text = "Tên cấu hình",
+        Default = "",
+        Placeholder = "Nhập tên cấu hình...",
+    })
+    ConfigGroup:AddButton("Tạo cấu hình", function() end)
+    ConfigGroup:AddDivider()
+    ConfigGroup:AddLabel("Danh sách cấu hình")
+    ConfigGroup:AddDropdown("ConfigList_Lobby", {
+        Text = "Chọn cấu hình",
+        Values = {"---"},
+        Default = 1,
+    })
+    ConfigGroup:AddButton("Tải cấu hình", function() end)
+    ConfigGroup:AddButton("Ghi đè cấu hình", function() end)
+    ConfigGroup:AddButton("Xóa cấu hình", function() end)
+    ConfigGroup:AddButton("Làm mới danh sách", function() end)
+    ConfigGroup:AddButton("Đặt tự động tải", function() end)
+    ConfigGroup:AddButton("Bỏ tự động tải", function() end)
+    ConfigGroup:AddLabel("Cấu hình tự động tải: không có")
+end
+
+Functions.GuiThongBao({ Title = "Đã tải thành công trong " .. math.floor((tick() - LoadStart) * 1000) / 1000 .. " giây." , Body = "Nhấn '" .. tostring(Options.MenuKeybind and Options.MenuKeybind.Value or "RightShift") .. "' để bật/tắt giao diện."})
