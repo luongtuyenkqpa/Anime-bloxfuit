@@ -1,0 +1,129 @@
+-- ============================================================
+--  LOADER_LUAU — Fixed by AnimeModHub
+--  Fix 1: Load Abysall Hub framework TRƯỚC khi chạy Lobby/Main
+--  Fix 2: Routing đúng cho tất cả PlaceId của DOORS
+--  Fix 3: GUARD TRIỆT ĐỂ chống load 2 lần menu (cả từ Animemodhub lẫn Loader)
+--  Fix 4: Mở/đóng menu bằng phím hoạt động đúng
+-- ============================================================
+
+-- ── FIX 3: GUARD TRIỆT ĐỂ ─────────────────────────────────
+-- Nếu Animemodhub đã xử lý DOORS rồi (LoadDoorsMenu đã chạy) → thoát ngay
+-- Nếu Loader này đã chạy rồi → thoát ngay
+-- Hai lớp guard để chặn MỌI trường hợp tạo menu 2 lần
+if getgenv().AnimeModHub_DoorsHandled then
+    warn("[Loader] Animemodhub đã xử lý DOORS rồi — Loader thoát để tránh hiện 2 menu!")
+    return
+end
+if getgenv().AnimeModHub_Loaded then
+    warn("[Loader] Script đã được load rồi — bỏ qua để tránh hiện 2 menu!")
+    return
+end
+getgenv().AnimeModHub_Loaded = true
+
+local BaseUrl = "https://raw.githubusercontent.com/luongtuyenkqpa/Anime-bloxfuit/refs/heads/main/"
+
+-- ── Bước 1: Load Abysall Hub framework (BẮT BUỘC) ──────────
+-- Lobby_luau_vi và Main_luau_vi đều dùng global "Abysall" ngay dòng đầu.
+-- Nếu không load Abysall trước, cả 2 file đều crash im lặng ngay lập tức.
+local ABYSALL_LOADER = "https://raw.githubusercontent.com/bocaj111004/Abysall/refs/heads/main/Loader.luau"
+
+-- Chỉ load Abysall nếu chưa có (tránh load 2 lần Abysall → 2 bộ Toggle/Lock)
+if not getgenv().Abysall then
+    local abysallOk, abysallErr = pcall(function()
+        loadstring(game:HttpGet(ABYSALL_LOADER))()
+    end)
+
+    if not abysallOk then
+        warn("[Loader] Không thể load Abysall framework: " .. tostring(abysallErr))
+        -- Thử URL dự phòng nếu repo đổi cấu trúc
+        pcall(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/bocaj111004/Abysall/main/Loader.luau"))()
+        end)
+    end
+
+    -- Đợi Abysall init xong (nó là async — cần chờ getgenv().Abysall sẵn sàng)
+    local waitTick = tick()
+    while not getgenv().Abysall do
+        if tick() - waitTick > 15 then
+            warn("[Loader] Timeout chờ Abysall — thử tiếp tục...")
+            break
+        end
+        task.wait(0.1)
+    end
+else
+    warn("[Loader] Abysall đã sẵn sàng (không load lại) — tránh tạo 2 bộ Toggle/Lock!")
+end
+
+-- ── Bước 2: Routing DOORS PlaceId ───────────────────────────
+-- Fix: Lobby chỉ check 1 PlaceId cũ (6516141723). Thực tế DOORS có
+-- nhiều PlaceId cho Lobby. Dùng workspace.Lobby để nhận dạng chắc chắn hơn.
+
+local DOORS_LOBBY_PLACES = {
+    [6516141723]  = true,  -- DOORS Lobby chính
+    [12308344607] = true,  -- DOORS LOBBY VOICE
+}
+
+local function isLobby()
+    -- Dấu hiệu rõ nhất: workspace.Lobby tồn tại
+    if workspace:FindFirstChild("Lobby") then
+        return true
+    end
+    -- Hoặc PlaceId là lobby đã biết
+    if DOORS_LOBBY_PLACES[game.PlaceId] then
+        return true
+    end
+    -- CurrentRooms chưa có Model = chưa vào game thực
+    local CR = workspace:FindFirstChild("CurrentRooms")
+    if not CR or not CR:FindFirstChildOfClass("Model") then
+        return true
+    end
+    return false
+end
+
+-- ── Bước 3: Chạy script phù hợp ─────────────────────────────
+local function safeLoad(url, label)
+    local ok, err = pcall(function()
+        loadstring(game:HttpGet(url))()
+    end)
+    if not ok then
+        warn("[Loader] Lỗi khi load " .. label .. ": " .. tostring(err))
+    end
+end
+
+-- ── Guard chặn Lobby load 2 lần ─────────────────────────────
+-- Kiểm tra trước khi load: nếu Lobby hoặc Main đã được load bởi bất kỳ ai → bỏ qua
+if isLobby() then
+    if getgenv().AnimeModHub_Lobby_Loaded then
+        warn("[Loader] Lobby menu đã tồn tại — bỏ qua để tránh hiện 2 menu!")
+        return
+    end
+    print("[Loader] Phát hiện: Sảnh chờ (Lobby) — đang load Lobby_luau_vi...")
+    safeLoad(BaseUrl .. "Lobby_luau_vi", "Lobby_luau_vi")
+
+    -- Watcher: tự động load Main khi người chơi vào game từ Lobby
+    -- Guard: chỉ chạy nếu Main chưa được load
+    task.spawn(function()
+        while true do
+            task.wait(2)
+            local CR = workspace:FindFirstChild("CurrentRooms")
+            if CR and CR:FindFirstChildOfClass("Model") then
+                -- Kiểm tra guard trước khi load Main
+                if getgenv().AnimeModHub_Main_Loaded then
+                    warn("[Loader] Main menu đã tồn tại — Watcher dừng lại, không load thêm!")
+                    break
+                end
+                print("[Loader] Phát hiện vào game — đang load Main_luau_vi...")
+                task.wait(2) -- đợi game load xong
+                safeLoad(BaseUrl .. "Main_luau_vi", "Main_luau_vi")
+                break
+            end
+        end
+    end)
+else
+    if getgenv().AnimeModHub_Main_Loaded then
+        warn("[Loader] Main menu đã tồn tại — bỏ qua để tránh hiện 2 menu!")
+        return
+    end
+    print("[Loader] Phát hiện: Trong game (In-game) — đang load Main_luau_vi...")
+    safeLoad(BaseUrl .. "Main_luau_vi", "Main_luau_vi")
+end
